@@ -1,0 +1,102 @@
+using System;
+using UnityEngine;
+
+namespace GestureFistGame
+{
+  public sealed class FishGameController : MonoBehaviour
+  {
+    public FishNetController net;
+    public FishSpawner spawner;
+    public FishGestureInput input;
+    public int roundSeconds = 30;
+    public bool autoStart = true;
+    public int Score { get; private set; }
+    public int Catches { get; private set; }
+    public int Combo { get; private set; }
+    public float TimeRemaining { get; private set; }
+    public bool IsRunning { get; private set; }
+    public bool IsFinished { get; private set; }
+    public string LastEvent { get; private set; } = "准备开始";
+    public string Rank
+    {
+      get
+      {
+        if (Score >= 80) return "S";
+        if (Score >= 45) return "A";
+        if (Score >= 20) return "B";
+        return "C";
+      }
+    }
+
+    public event Action<FishTarget> FishCaught;
+
+    private void Start()
+    {
+#if UNITY_ANDROID || UNITY_IOS
+      Screen.orientation = ScreenOrientation.Portrait;
+      Screen.autorotateToPortrait = true;
+      Screen.autorotateToPortraitUpsideDown = true;
+      Screen.autorotateToLandscapeLeft = false;
+      Screen.autorotateToLandscapeRight = false;
+#endif
+      if (autoStart) ResetRound();
+    }
+
+    private void Update()
+    {
+      if (Input.GetKeyDown(KeyCode.R)) ResetRound();
+      if (!IsRunning) return;
+      TimeRemaining -= Time.unscaledDeltaTime;
+      if (TimeRemaining <= 0)
+      {
+        TimeRemaining = 0;
+        IsRunning = false;
+        IsFinished = true;
+        LastEvent = "回合结束 · 点击重新开始";
+        spawner?.StopSpawning();
+      }
+    }
+
+    public void ResetRound()
+    {
+      Score = 0;
+      Catches = 0;
+      Combo = 0;
+      TimeRemaining = roundSeconds;
+      IsFinished = false;
+      IsRunning = true;
+      LastEvent = "向上挥手，把鱼抛起来";
+      net?.ResetNet();
+      spawner?.ResetSpawner();
+    }
+
+    public bool TryThrow(string source)
+    {
+      if (!IsRunning || IsFinished || net == null) return false;
+      if (!net.TryThrow())
+      {
+        LastEvent = "网还在下落或冷却中";
+        return false;
+      }
+      LastEvent = source + " · 网已抛起";
+      return true;
+    }
+
+    public void CatchFish(FishTarget fish)
+    {
+      if (!IsRunning || IsFinished || fish == null || fish.Caught) return;
+      fish.MarkCaught();
+      Score += fish.points;
+      Catches++;
+      Combo++;
+      LastEvent = "捕获 " + fish.displayName + "  +" + fish.points;
+      FishCaught?.Invoke(fish);
+    }
+
+    public void MissedFish()
+    {
+      Combo = 0;
+      if (IsRunning) LastEvent = "鱼游过去了 · 再挥一次";
+    }
+  }
+}
