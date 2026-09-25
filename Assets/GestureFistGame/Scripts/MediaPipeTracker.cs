@@ -27,6 +27,8 @@ namespace GestureFistGame
     public bool autoStart = true;
     public bool usePose = true;
     public bool mirrorPreview = true;
+    [Tooltip("部分 Android WebCamTexture 会把视频再倒置 180°；当前手机预览使用此补偿")]
+    public int previewRotationOffset = 180;
     [Tooltip("Skip the Intel virtual driver whose RGB24 subtype can block Unity WebCamTexture.Play on Windows.")]
     public bool skipUnsupportedIntelVirtualCamera = true;
     public string Status { get; private set; } = "摄像头准备中";
@@ -286,7 +288,7 @@ namespace GestureFistGame
       if (preview != null)
       {
         preview.uvRect = new UnityEngine.Rect(mirrorPreview ? 1:0, _webcam.videoVerticallyMirrored ? 1:0, mirrorPreview ? -1:1, _webcam.videoVerticallyMirrored ? -1:1);
-        preview.rectTransform.localEulerAngles = new Vector3(0,0,-_webcam.videoRotationAngle);
+        preview.rectTransform.localEulerAngles = new Vector3(0,0,-_webcam.videoRotationAngle + previewRotationOffset);
       }
       var timer=System.Diagnostics.Stopwatch.StartNew();
       try

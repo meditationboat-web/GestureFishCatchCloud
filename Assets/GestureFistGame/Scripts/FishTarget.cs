@@ -36,8 +36,10 @@ namespace GestureFistGame
         return;
       }
       if (Caught) return;
-      transform.position += Vector3.back * speed * Time.fixedDeltaTime;
-      if (transform.position.z < -2.5f)
+      // The reference game shows the fish crossing the net from right to left.
+      // Keep the fish on the water lane's z range and remove it after the left bank.
+      transform.position += Vector3.left * speed * Time.fixedDeltaTime;
+      if (transform.position.x < -4.7f)
       {
         game?.MissedFish();
         Destroy(gameObject);

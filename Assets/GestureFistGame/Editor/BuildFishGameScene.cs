@@ -34,7 +34,7 @@ namespace GestureFistGame.Editor
       SetupMaterials();
 
       var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-      var root = new GameObject("GestureFishGame - 单人挥手抛网捕鱼");
+      var root = new GameObject("GestureFishGame - 双人合作挥手抛网捕鱼");
       var game = root.AddComponent<FishGameController>();
       var runtimeChecks = root.AddComponent<FishRuntimeChecks>();
       runtimeChecks.game = game;
@@ -46,6 +46,7 @@ namespace GestureFistGame.Editor
       CreateArena(arena);
 
       var net = CreateNet(arena);
+      CreatePlayerAvatars(arena);
       var spawnerGo = new GameObject("FishSpawner - 鱼群生成器");
       spawnerGo.transform.SetParent(root.transform, false);
       var spawner = spawnerGo.AddComponent<FishSpawner>();
@@ -61,6 +62,7 @@ namespace GestureFistGame.Editor
       input.game = game;
       input.tracker = tracker;
       input.mouseInput = mouse;
+      mouse.gestureInput = input;
       input.mouseMode = true;
       input.startCameraOnMobile = true;
       tracker.input = null;
@@ -111,10 +113,12 @@ namespace GestureFistGame.Editor
       if (spawner.prototypes == null || spawner.prototypes.Length < 4) throw new Exception("鱼种原型不足");
       if (net.game != game || spawner.game != game || input.game != game || tracker.fishInput != input)
         throw new Exception("捕鱼场景脚本引用未连接");
+      if (!input.requireTwoHands) throw new Exception("双手合作模式未启用");
       Directory.CreateDirectory("Artifacts");
       File.WriteAllText("Artifacts/fish-scene-validation.txt",
         "Scene: " + scene.path + "\nObjects: " + objects.Length + "\nFish prototypes: " + spawner.prototypes.Length +
-        "\nFish catch loop: linked\nMediaPipe hand input: linked\nMouse fallback: linked\nMobile camera: usePose=false, 20 FPS\n");
+        "\nFish direction: right-to-left\nNet: vertical center trigger\nTwo-hand cooperation: " + input.cooperationWindow.ToString("0.00") + " seconds\n" +
+        "Fish catch loop: linked\nMediaPipe hand input: linked\nMouse fallback: linked\nMobile camera: usePose=false, 20 FPS\n");
       Debug.Log("FISH_SCENE_VALIDATED objects=" + objects.Length + " fishPrototypes=" + spawner.prototypes.Length);
     }
 
@@ -194,23 +198,24 @@ namespace GestureFistGame.Editor
 
     private static void CreateArena(Transform parent)
     {
-      Primitive("WaterChannel", PrimitiveType.Cube, parent, new Vector3(0, 0, 3), new Vector3(10, .25f, 16), Mats["Water"]);
-      Primitive("LeftGrassBank", PrimitiveType.Cube, parent, new Vector3(-6.3f, .25f, 3), new Vector3(2.6f, .5f, 16), Mats["Grass"]);
-      Primitive("RightGrassBank", PrimitiveType.Cube, parent, new Vector3(6.3f, .25f, 3), new Vector3(2.6f, .5f, 16), Mats["Grass"]);
-      Primitive("LeftWaterEdge", PrimitiveType.Cube, parent, new Vector3(-5.05f, .18f, 3), new Vector3(.18f, .18f, 16), Mats["WaterEdge"], false);
-      Primitive("RightWaterEdge", PrimitiveType.Cube, parent, new Vector3(5.05f, .18f, 3), new Vector3(.18f, .18f, 16), Mats["WaterEdge"], false);
-      Primitive("StartBank", PrimitiveType.Cube, parent, new Vector3(0, .28f, -5), new Vector3(13, .55f, 1.2f), Mats["Sand"]);
-      Primitive("EndBank", PrimitiveType.Cube, parent, new Vector3(0, .28f, 11), new Vector3(13, .55f, 1.2f), Mats["Sand"]);
+      // 横向水道：Doro 从右岸进入，穿过中央竖网后向左岸游出。
+      Primitive("WaterChannel_RightToLeft", PrimitiveType.Cube, parent, new Vector3(0, 0, 0), new Vector3(8.4f, .25f, 8), Mats["Water"]);
+      Primitive("LeftGrassBank", PrimitiveType.Cube, parent, new Vector3(-4.8f, .25f, 0), new Vector3(.8f, .5f, 8), Mats["Grass"]);
+      Primitive("RightGrassBank", PrimitiveType.Cube, parent, new Vector3(4.8f, .25f, 0), new Vector3(.8f, .5f, 8), Mats["Grass"]);
+      Primitive("LeftWaterEdge", PrimitiveType.Cube, parent, new Vector3(-4.3f, .18f, 0), new Vector3(.18f, .18f, 8), Mats["WaterEdge"], false);
+      Primitive("RightWaterEdge", PrimitiveType.Cube, parent, new Vector3(4.3f, .18f, 0), new Vector3(.18f, .18f, 8), Mats["WaterEdge"], false);
+      Primitive("FarBank", PrimitiveType.Cube, parent, new Vector3(0, .28f, 4.3f), new Vector3(10, .55f, 1.0f), Mats["Sand"]);
+      Primitive("NearBank", PrimitiveType.Cube, parent, new Vector3(0, .28f, -4.3f), new Vector3(10, .55f, 1.0f), Mats["Sand"]);
       for (int i = 0; i < 10; i++)
       {
-        float z = -4 + i * 1.65f;
-        Primitive("WaterLine_" + i, PrimitiveType.Cube, parent, new Vector3(0, .14f, z), new Vector3(9.7f, .018f, .025f), Mats["WaterEdge"], false);
+        float z = -4 + i * .9f;
+        Primitive("WaterLine_" + i, PrimitiveType.Cube, parent, new Vector3(0, .14f, z), new Vector3(8.1f, .018f, .025f), Mats["WaterEdge"], false);
       }
     }
 
     private static FishNetController CreateNet(Transform parent)
     {
-      var go = new GameObject("Net - 向上挥手抛起");
+      var go = new GameObject("Net - 中央竖网");
       go.transform.SetParent(parent, false);
       go.transform.localPosition = new Vector3(0, .65f, 0);
       var net = go.AddComponent<FishNetController>();
@@ -219,13 +224,13 @@ namespace GestureFistGame.Editor
       body.useGravity = false;
       var trigger = go.AddComponent<BoxCollider>();
       trigger.isTrigger = true;
-      trigger.center = new Vector3(0, -.45f, 0);
-      trigger.size = new Vector3(4.6f, 2.2f, .75f);
-      var panel = Primitive("NetPanel", PrimitiveType.Cube, go.transform, new Vector3(0, .06f, 0), new Vector3(4.3f, .75f, .10f), Mats["Net"], false);
+      trigger.center = new Vector3(0, .45f, 0);
+      trigger.size = new Vector3(.75f, 2.2f, 3.8f);
+      var panel = Primitive("NetPanel_Vertical", PrimitiveType.Cube, go.transform, new Vector3(0, .70f, 0), new Vector3(.10f, 2.0f, 3.5f), Mats["Net"], false);
       net.visual = panel.transform;
-      Primitive("NetLeftPost", PrimitiveType.Cylinder, go.transform, new Vector3(-2.2f, .25f, 0), new Vector3(.10f, .60f, .10f), Mats["NetDark"], false);
-      Primitive("NetRightPost", PrimitiveType.Cylinder, go.transform, new Vector3(2.2f, .25f, 0), new Vector3(.10f, .60f, .10f), Mats["NetDark"], false);
-      Primitive("NetTop", PrimitiveType.Cube, go.transform, new Vector3(0, .65f, 0), new Vector3(4.5f, .10f, .14f), Mats["Gold"], false);
+      Primitive("NetFrontPost", PrimitiveType.Cylinder, go.transform, new Vector3(0, .70f, -1.8f), new Vector3(.10f, 1.1f, .10f), Mats["NetDark"], false);
+      Primitive("NetBackPost", PrimitiveType.Cylinder, go.transform, new Vector3(0, .70f, 1.8f), new Vector3(.10f, 1.1f, .10f), Mats["NetDark"], false);
+      Primitive("NetTop_Vertical", PrimitiveType.Cube, go.transform, new Vector3(0, 1.75f, 0), new Vector3(.14f, .10f, 3.7f), Mats["Gold"], false);
       return net;
     }
 
@@ -271,7 +276,13 @@ namespace GestureFistGame.Editor
         var matPath = Root + "/Materials/Fish_DoroTint_" + variant + ".mat";
         var mat = AssetDatabase.LoadAssetAtPath<Material>(matPath);
         if (mat == null && baseMat != null) { mat = new Material(baseMat); AssetDatabase.CreateAsset(mat, matPath); }
-        if (mat != null) { mat.color = tint; mat.SetFloat("_RimStrength", .06f); EditorUtility.SetDirty(mat); }
+        // Doro 保持原模型纹理颜色；稀有度由运行时轮廓色表达，不再给整只 Doro 染色。
+        if (mat != null)
+        {
+          if (baseMat != null) mat.color = baseMat.color;
+          mat.SetFloat("_RimStrength", .06f);
+          EditorUtility.SetDirty(mat);
+        }
         var renderers = model.GetComponentsInChildren<Renderer>(true);
         foreach (var r in renderers)
         {
@@ -297,15 +308,45 @@ namespace GestureFistGame.Editor
       return b;
     }
 
+    private static void CreatePlayerAvatars(Transform arena)
+    {
+      CreatePlayerAvatar(arena, "左侧玩家小人", new Vector3(-4.25f, .42f, 0), true, Mats["Net"]);
+      CreatePlayerAvatar(arena, "右侧玩家小人", new Vector3(4.25f, .42f, 0), false, Mats["Gold"]);
+    }
+
+    private static void CreatePlayerAvatar(Transform parent, string name, Vector3 position, bool faceRight, Material accent)
+    {
+      var root = new GameObject(name).transform;
+      root.SetParent(parent, false);
+      root.localPosition = position;
+      root.localRotation = Quaternion.Euler(0, faceRight ? 90f : -90f, 0);
+      var body = Primitive("AvatarBody", PrimitiveType.Capsule, root, new Vector3(0, .65f, 0), new Vector3(.45f, .7f, .45f), Mats["White"], false);
+      Primitive("AvatarHead", PrimitiveType.Sphere, root, new Vector3(0, 1.55f, 0), new Vector3(.55f, .55f, .55f), accent, false);
+      Primitive("AvatarLeftArm", PrimitiveType.Capsule, root, new Vector3(.38f, 1.0f, -.22f), new Vector3(.14f, .55f, .14f), accent, false).transform.localRotation = Quaternion.Euler(0, 0, -42f);
+      Primitive("AvatarRightArm", PrimitiveType.Capsule, root, new Vector3(.38f, 1.0f, .22f), new Vector3(.14f, .55f, .14f), accent, false).transform.localRotation = Quaternion.Euler(0, 0, -42f);
+      Primitive("AvatarBase", PrimitiveType.Cylinder, root, new Vector3(0, .12f, 0), new Vector3(.7f, .12f, .7f), Mats["NetDark"], false);
+      var label = new GameObject("AvatarLabel", typeof(TextMesh));
+      label.transform.SetParent(root, false);
+      label.transform.localPosition = new Vector3(0, 2.15f, 0);
+      label.transform.localRotation = Quaternion.Euler(58f, 0, 0);
+      var text = label.GetComponent<TextMesh>();
+      text.text = name.Replace("小人", "");
+      text.characterSize = .12f;
+      text.fontSize = 36;
+      text.anchor = TextAnchor.MiddleCenter;
+      text.alignment = TextAlignment.Center;
+      text.color = new Color(.1f, .15f, .2f);
+    }
+
     private static void CreateCamera(Transform parent)
     {
       var go = new GameObject("Main Camera", typeof(Camera), typeof(AudioListener));
       go.transform.SetParent(parent, false);
       go.tag = "MainCamera";
-      go.transform.position = new Vector3(0, 10.5f, -11.5f);
-      go.transform.LookAt(new Vector3(0, .45f, 3.1f));
+      go.transform.position = new Vector3(0, 12.8f, -12.8f);
+      go.transform.LookAt(new Vector3(0, .45f, 0));
       var camera = go.GetComponent<Camera>();
-      camera.orthographic = true; camera.orthographicSize = 7.4f;
+      camera.orthographic = true; camera.orthographicSize = 7.6f;
       camera.nearClipPlane = .05f; camera.farClipPlane = 80;
       camera.clearFlags = CameraClearFlags.SolidColor; camera.backgroundColor = new Color(.52f, .82f, .93f);
     }
@@ -363,14 +404,14 @@ namespace GestureFistGame.Editor
       var ui = canvasGo.AddComponent<FishGameUI>(); ui.game = game; ui.input = input; ui.tracker = tracker;
       var ink = new Color(.94f, .95f, .96f, .94f); var dark = new Color(.16f, .19f, .23f); var muted = new Color(.28f, .32f, .38f);
       var title = Panel("TitleCard", canvasGo.transform, new Vector2(0, 1), new Vector2(190, -92), new Vector2(360, 130), ink);
-      Label("Title", title, "挥手抛网捕鱼", new Vector2(0, 27), new Vector2(330, 48), 28, dark, TextAnchor.MiddleCenter);
-      Label("Subtitle", title, "MEDIA PIPE  /  单人手势学习", new Vector2(0, -23), new Vector2(330, 24), 14, muted, TextAnchor.MiddleCenter);
+      Label("Title", title, "双人合作抛网捕鱼", new Vector2(0, 27), new Vector2(330, 48), 28, dark, TextAnchor.MiddleCenter);
+      Label("Subtitle", title, "MEDIA PIPE  /  左右双手协同", new Vector2(0, -23), new Vector2(330, 24), 14, muted, TextAnchor.MiddleCenter);
       var scorePanel = Panel("ScorePanel", canvasGo.transform, new Vector2(1, 1), new Vector2(-190, -92), new Vector2(360, 130), ink);
       ui.scoreText = Label("Score", scorePanel, "分数  0    连击  0", new Vector2(0, 28), new Vector2(330, 34), 21, dark, TextAnchor.MiddleCenter);
       ui.timeText = Label("Time", scorePanel, "时间  30 秒", new Vector2(-85, -24), new Vector2(150, 28), 17, muted, TextAnchor.MiddleCenter);
       ui.rankText = Label("Rank", scorePanel, "等级  C", new Vector2(90, -24), new Vector2(120, 28), 17, muted, TextAnchor.MiddleCenter);
       var statusPanel = Panel("StatusPanel", canvasGo.transform, new Vector2(.5f, 0), new Vector2(0, 125), new Vector2(740, 128), ink);
-      ui.statusText = Label("Status", statusPanel, "向上挥手，把鱼抛起来", new Vector2(0, 21), new Vector2(700, 54), 16, dark, TextAnchor.MiddleCenter);
+      ui.statusText = Label("Status", statusPanel, "左右双手一起向上挥，把鱼网抛起来", new Vector2(0, 21), new Vector2(700, 54), 16, dark, TextAnchor.MiddleCenter);
       ui.netText = Label("NetState", statusPanel, "网状态  Ready", new Vector2(0, -31), new Vector2(300, 26), 14, muted, TextAnchor.MiddleCenter);
       var gesture = Button(statusPanel, "手势控制", new Vector2(255, -31), new Vector2(135, 32), ui.UseGesture);
       var mouse = Button(statusPanel, "鼠标测试", new Vector2(405, -31), new Vector2(135, 32), ui.UseMouse);
@@ -391,8 +432,8 @@ namespace GestureFistGame.Editor
     private static void CreateWorldGuide(Transform arena)
     {
       var board = new GameObject("WorldSpaceGuide - 3D提示牌").transform;
-      board.SetParent(arena, false); board.localPosition = new Vector3(5.65f, .3f, 3.5f); board.localRotation = Quaternion.Euler(0, -24, 0);
-      GestureArtUpgrade.PopulateGate(board, "向上挥手\n抛网捕鱼");
+      board.SetParent(arena, false); board.localPosition = new Vector3(0, .3f, 4.35f); board.localRotation = Quaternion.identity;
+      GestureArtUpgrade.PopulateGate(board, "左右双手\n合作抛网");
     }
 
     private static void UpdateBuildSettings()

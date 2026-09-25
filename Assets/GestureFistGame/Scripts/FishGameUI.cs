@@ -55,7 +55,7 @@ namespace GestureFistGame
       {
         statusText.text += "\n" + tracker.Status;
         if (cameraDebugText != null)
-          cameraDebugText.text = tracker.Diagnostics + " | 手=" + (input.HandDetected ? "已识别" : "未识别");
+          cameraDebugText.text = tracker.Diagnostics + " | 手=" + input.DetectedHands + "/2" + (input.BothHandsDetected ? " 合作就绪" : " 等待另一只");
       }
       else if (cameraDebugText != null)
       {

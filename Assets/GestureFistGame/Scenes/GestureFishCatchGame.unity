@@ -3002,8 +3002,8 @@ MonoBehaviour:
   - {fileID: 910446284}
   - {fileID: 1582526662}
   spawnInterval: 0.72
-  spawnZ: 8.2
-  laneWidth: 4.2
+  spawnX: 4.1
+  laneHalfWidth: 3.2
   minSpeed: 1.3
   maxSpeed: 2.4
 --- !u!4 &884234288
