@@ -8,6 +8,7 @@ using Mediapipe.Tasks.Vision.PoseLandmarker;
 using Mediapipe.Tasks.Vision.HandLandmarker;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Networking;
 using MPImage = Mediapipe.Image;
 using Color = UnityEngine.Color;
 
@@ -63,9 +64,26 @@ namespace GestureFistGame
       try
       {
         var handBytes = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, handModel));
+        byte[] poseBytes = null;
+        if (usePose)
+          poseBytes = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, poseModel));
+        return CreateModels(handBytes, poseBytes);
+      }
+      catch (Exception e)
+      {
+        Status = "模型加载失败：" + e.Message;
+        Debug.LogError(Status);
+        DisposeTasks();
+        return false;
+      }
+    }
+
+    private bool CreateModels(byte[] handBytes, byte[] poseBytes)
+    {
+      try
+      {
         if (usePose)
         {
-          var poseBytes = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, poseModel));
           _pose = PoseLandmarker.CreateFromOptions(new PoseLandmarkerOptions(
             new BaseOptions(BaseOptions.Delegate.CPU, modelAssetBuffer: poseBytes),
             RunningMode.VIDEO, 1, .5f, .5f, .5f, false));
@@ -85,6 +103,46 @@ namespace GestureFistGame
         DisposeTasks();
         return false;
       }
+    }
+
+    private IEnumerator LoadModelsForAndroid()
+    {
+      if (ModelsReady) yield break;
+      byte[] handBytes = null;
+      byte[] poseBytes = null;
+      Status = "正在从 APK 读取手势模型";
+
+      var handUrl = Application.streamingAssetsPath.TrimEnd('/', '\\') + "/" + handModel;
+      using (var request = UnityWebRequest.Get(handUrl))
+      {
+        yield return request.SendWebRequest();
+        if (request.result != UnityWebRequest.Result.Success)
+        {
+          Status = "模型加载失败：手部模型读取失败 · " + request.error;
+          Debug.LogError(Status + " url=" + handUrl);
+          yield break;
+        }
+        handBytes = request.downloadHandler.data;
+      }
+
+      if (usePose)
+      {
+        var poseUrl = Application.streamingAssetsPath.TrimEnd('/', '\\') + "/" + poseModel;
+        using (var request = UnityWebRequest.Get(poseUrl))
+        {
+          yield return request.SendWebRequest();
+          if (request.result != UnityWebRequest.Result.Success)
+          {
+            Status = "模型加载失败：姿态模型读取失败 · " + request.error;
+            Debug.LogError(Status + " url=" + poseUrl);
+            yield break;
+          }
+          poseBytes = request.downloadHandler.data;
+        }
+      }
+
+      if (!CreateModels(handBytes, poseBytes) && string.IsNullOrEmpty(Status))
+        Status = "模型加载失败：MediaPipe 模型创建失败";
     }
 
     public IEnumerator StartCamera()
@@ -109,7 +167,19 @@ namespace GestureFistGame
       }
       _permissionState = "已授权";
       Status = "正在载入 MediaPipe";
-      if (!LoadModels()) { _starting = false; yield break; }
+      if (IsAndroid())
+        yield return LoadModelsForAndroid();
+      else if (!LoadModels())
+      {
+        _starting = false;
+        yield break;
+      }
+      if (!ModelsReady)
+      {
+        if (string.IsNullOrEmpty(Status)) Status = "模型加载失败：模型未就绪";
+        _starting = false;
+        yield break;
+      }
       if (Application.isEditor || !IsAndroid())
       {
         if (!Application.HasUserAuthorization(UserAuthorization.WebCam))
