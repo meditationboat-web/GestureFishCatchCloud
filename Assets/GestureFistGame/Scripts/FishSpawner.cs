@@ -84,7 +84,9 @@ namespace GestureFistGame
       fish.game = game;
       fish.transform.position = new Vector3(spawnX, .7f, UnityEngine.Random.Range(-laneHalfWidth, laneHalfWidth));
       fish.speed = UnityEngine.Random.Range(minSpeed, maxSpeed) * (1f + game.Catches * .006f);
-      fish.transform.rotation = Quaternion.Euler(0, 180, 0);
+      // Doro's face points in the same direction as its travel (right to left)
+      // instead of toward the near/bottom bank.
+      fish.transform.rotation = Quaternion.Euler(0, 270, 0);
       fish.gameObject.SetActive(true);
     }
   }

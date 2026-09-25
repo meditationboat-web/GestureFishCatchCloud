@@ -50,11 +50,12 @@ namespace GestureFistGame
       if (net == null) return;
       net.transform.localPosition = new Vector3(0, .65f, 0);
       var trigger = net.GetComponent<BoxCollider>();
-      if (trigger != null) { trigger.center = new Vector3(0, .45f, 0); trigger.size = new Vector3(.75f, 2.2f, 8.0f); }
-      SetTransform(FindChild(net.transform, "NetPanel_Vertical", "NetPanel"), new Vector3(0, .70f, 0), new Vector3(.10f, 2.0f, 7.7f));
-      SetTransform(FindChild(net.transform, "NetFrontPost", "NetLeftPost"), new Vector3(0, .70f, -3.9f), new Vector3(.10f, 1.1f, .10f));
-      SetTransform(FindChild(net.transform, "NetBackPost", "NetRightPost"), new Vector3(0, .70f, 3.9f), new Vector3(.10f, 1.1f, .10f));
-      SetTransform(FindChild(net.transform, "NetTop_Vertical", "NetTop"), new Vector3(0, 1.75f, 0), new Vector3(.14f, .10f, 8.0f));
+      if (trigger != null) { trigger.center = new Vector3(0, .45f, 0); trigger.size = new Vector3(1.20f, 2.45f, 9.1f); }
+      // Extend beyond both banks so the net visibly spans the complete river.
+      SetTransform(FindChild(net.transform, "NetPanel_Vertical", "NetPanel"), new Vector3(0, .70f, 0), new Vector3(1.15f, 2.25f, 9.0f));
+      SetTransform(FindChild(net.transform, "NetFrontPost", "NetLeftPost"), new Vector3(0, .70f, -4.45f), new Vector3(.14f, 1.2f, .14f));
+      SetTransform(FindChild(net.transform, "NetBackPost", "NetRightPost"), new Vector3(0, .70f, 4.45f), new Vector3(.14f, 1.2f, .14f));
+      SetTransform(FindChild(net.transform, "NetTop_Vertical", "NetTop"), new Vector3(0, 1.88f, 0), new Vector3(1.25f, .12f, 9.1f));
     }
 
     private static void ApplyCamera()
@@ -71,15 +72,9 @@ namespace GestureFistGame
     {
       var board = FindNamed("WorldSpaceGuide - 3D提示牌");
       if (board == null) return;
-      board.localPosition = new Vector3(0, 1.0f, 3.65f);
-      board.localScale = Vector3.one * 1.35f;
-      var label = board.GetComponentInChildren<TextMesh>(true);
-      if (label != null)
-      {
-        label.text = "双手合作\n抛网捕鱼";
-        label.fontSize = 76;
-        label.characterSize = .045f;
-      }
+      // The old blue gate looked like a fence and obscured the river. The
+      // instruction is now shown in the readable status bar instead.
+      board.gameObject.SetActive(false);
     }
 
     private static void ApplySpawner()
@@ -99,20 +94,23 @@ namespace GestureFistGame
 
     private static void CreateAvatarsIfMissing()
     {
-      if (FindNamed("左侧玩家小人") != null && FindNamed("右侧玩家小人") != null) return;
       var arena = FindNamed("Arena - 水道与草岸");
       if (arena == null) return;
-      CreateAvatar(arena, "左侧玩家小人", new Vector3(-3.9f, .25f, 0), new Color(.12f, .8f, 1f), true);
-      CreateAvatar(arena, "右侧玩家小人", new Vector3(3.9f, .25f, 0), new Color(1f, .7f, .1f), false);
+      var lower = FindNamed("玩家1", "左侧玩家小人", "下方玩家小人");
+      var upper = FindNamed("玩家2", "右侧玩家小人", "上方玩家小人");
+      if (lower == null) lower = CreateAvatar(arena, "玩家1", new Vector3(0, .25f, -4.15f), new Color(.12f, .8f, 1f), false);
+      if (upper == null) upper = CreateAvatar(arena, "玩家2", new Vector3(0, .25f, 4.15f), new Color(1f, .7f, .1f), true);
+      ConfigureAvatar(lower, "玩家1", new Vector3(0, .25f, -4.15f), false);
+      ConfigureAvatar(upper, "玩家2", new Vector3(0, .25f, 4.15f), true);
     }
 
-    private static void CreateAvatar(Transform parent, string name, Vector3 position, Color accent, bool faceRight)
+    private static Transform CreateAvatar(Transform parent, string name, Vector3 position, Color accent, bool faceAwayFromCamera)
     {
       var root = new GameObject(name).transform;
       root.SetParent(parent, false); root.localPosition = position;
-      root.localRotation = Quaternion.Euler(0, faceRight ? 90f : -90f, 0);
+      root.localRotation = Quaternion.Euler(0, faceAwayFromCamera ? 180f : 0f, 0);
       var shader = Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
-      if (shader == null) return;
+      if (shader == null) return null;
       var material = new Material(shader); material.color = accent; material.name = name + " Accent";
       var bodyMaterial = new Material(shader); bodyMaterial.color = new Color(.96f, .96f, .93f); bodyMaterial.name = name + " Body";
       CreatePrimitive("AvatarBody", PrimitiveType.Capsule, root, new Vector3(0, .9f, 0), new Vector3(.58f, .82f, .58f), material);
@@ -126,8 +124,20 @@ namespace GestureFistGame
       CreatePrimitive("AvatarBase", PrimitiveType.Cylinder, root, new Vector3(0, .08f, 0), new Vector3(.85f, .10f, .85f), bodyMaterial);
       var label = new GameObject("AvatarLabel", typeof(TextMesh));
       label.transform.SetParent(root, false); label.transform.localPosition = new Vector3(0, 2.15f, 0); label.transform.localRotation = Quaternion.Euler(58f, 0, 0);
-      var text = label.GetComponent<TextMesh>(); text.text = name.Replace("小人", ""); text.characterSize = .12f; text.fontSize = 36; text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center; text.color = new Color(.1f, .15f, .2f);
+      var text = label.GetComponent<TextMesh>(); text.text = name; text.characterSize = .12f; text.fontSize = 36; text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center; text.color = new Color(.1f, .15f, .2f);
       label.AddComponent<FishWorldLabel>();
+      return root;
+    }
+
+    private static void ConfigureAvatar(Transform avatar, string displayName, Vector3 position, bool faceAwayFromCamera)
+    {
+      if (avatar == null) return;
+      avatar.name = displayName;
+      avatar.localPosition = position;
+      avatar.localRotation = Quaternion.Euler(0, faceAwayFromCamera ? 180f : 0f, 0);
+      var label = avatar.Find("AvatarLabel");
+      var text = label != null ? label.GetComponent<TextMesh>() : null;
+      if (text != null) text.text = displayName;
     }
 
     private static GameObject CreatePrimitive(string name, PrimitiveType type, Transform parent, Vector3 position, Vector3 scale, Material material)

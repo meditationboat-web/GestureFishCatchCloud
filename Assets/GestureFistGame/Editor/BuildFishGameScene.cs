@@ -225,12 +225,12 @@ namespace GestureFistGame.Editor
       var trigger = go.AddComponent<BoxCollider>();
       trigger.isTrigger = true;
       trigger.center = new Vector3(0, .45f, 0);
-      trigger.size = new Vector3(.75f, 2.2f, 8.0f);
-      var panel = Primitive("NetPanel_Vertical", PrimitiveType.Cube, go.transform, new Vector3(0, .70f, 0), new Vector3(.10f, 2.0f, 7.7f), Mats["Net"], false);
+      trigger.size = new Vector3(1.20f, 2.45f, 9.1f);
+      var panel = Primitive("NetPanel_Vertical", PrimitiveType.Cube, go.transform, new Vector3(0, .70f, 0), new Vector3(1.15f, 2.25f, 9.0f), Mats["Net"], false);
       net.visual = panel.transform;
-      Primitive("NetFrontPost", PrimitiveType.Cylinder, go.transform, new Vector3(0, .70f, -3.9f), new Vector3(.10f, 1.1f, .10f), Mats["NetDark"], false);
-      Primitive("NetBackPost", PrimitiveType.Cylinder, go.transform, new Vector3(0, .70f, 3.9f), new Vector3(.10f, 1.1f, .10f), Mats["NetDark"], false);
-      Primitive("NetTop_Vertical", PrimitiveType.Cube, go.transform, new Vector3(0, 1.75f, 0), new Vector3(.14f, .10f, 8.0f), Mats["Gold"], false);
+      Primitive("NetFrontPost", PrimitiveType.Cylinder, go.transform, new Vector3(0, .70f, -4.45f), new Vector3(.14f, 1.2f, .14f), Mats["NetDark"], false);
+      Primitive("NetBackPost", PrimitiveType.Cylinder, go.transform, new Vector3(0, .70f, 4.45f), new Vector3(.14f, 1.2f, .14f), Mats["NetDark"], false);
+      Primitive("NetTop_Vertical", PrimitiveType.Cube, go.transform, new Vector3(0, 1.88f, 0), new Vector3(1.25f, .12f, 9.1f), Mats["Gold"], false);
       return net;
     }
 
@@ -310,16 +310,16 @@ namespace GestureFistGame.Editor
 
     private static void CreatePlayerAvatars(Transform arena)
     {
-      CreatePlayerAvatar(arena, "左侧玩家小人", new Vector3(-3.9f, .25f, 0), true, Mats["Net"]);
-      CreatePlayerAvatar(arena, "右侧玩家小人", new Vector3(3.9f, .25f, 0), false, Mats["Gold"]);
+      CreatePlayerAvatar(arena, "玩家1", new Vector3(0, .25f, -4.15f), false, Mats["Net"]);
+      CreatePlayerAvatar(arena, "玩家2", new Vector3(0, .25f, 4.15f), true, Mats["Gold"]);
     }
 
-    private static void CreatePlayerAvatar(Transform parent, string name, Vector3 position, bool faceRight, Material accent)
+    private static void CreatePlayerAvatar(Transform parent, string name, Vector3 position, bool faceAwayFromCamera, Material accent)
     {
       var root = new GameObject(name).transform;
       root.SetParent(parent, false);
       root.localPosition = position;
-      root.localRotation = Quaternion.Euler(0, faceRight ? 90f : -90f, 0);
+      root.localRotation = Quaternion.Euler(0, faceAwayFromCamera ? 180f : 0f, 0);
       Primitive("AvatarBody", PrimitiveType.Capsule, root, new Vector3(0, .9f, 0), new Vector3(.58f, .82f, .58f), accent, false);
       Primitive("AvatarHead", PrimitiveType.Sphere, root, new Vector3(0, 1.9f, 0), new Vector3(.62f, .62f, .62f), Mats["White"], false);
       Primitive("AvatarLeftArm", PrimitiveType.Capsule, root, new Vector3(.48f, 1.25f, -.28f), new Vector3(.18f, .68f, .18f), Mats["White"], false).transform.localRotation = Quaternion.Euler(0, 0, -48f);
@@ -334,7 +334,7 @@ namespace GestureFistGame.Editor
       label.transform.localPosition = new Vector3(0, 2.15f, 0);
       label.transform.localRotation = Quaternion.Euler(58f, 0, 0);
       var text = label.GetComponent<TextMesh>();
-      text.text = name.Replace("小人", "");
+      text.text = name;
       text.characterSize = .12f;
       text.fontSize = 36;
       text.anchor = TextAnchor.MiddleCenter;
@@ -410,7 +410,7 @@ namespace GestureFistGame.Editor
       var ink = new Color(.94f, .95f, .96f, .94f); var dark = new Color(.16f, .19f, .23f); var muted = new Color(.28f, .32f, .38f);
       var title = Panel("TitleCard", canvasGo.transform, new Vector2(0, 1), new Vector2(225, -105), new Vector2(430, 150), ink);
       Label("Title", title, "双人合作抛网捕鱼", new Vector2(0, 34), new Vector2(400, 54), 34, dark, TextAnchor.MiddleCenter);
-      Label("Subtitle", title, "MEDIA PIPE  /  左右双手协同", new Vector2(0, -28), new Vector2(400, 28), 18, muted, TextAnchor.MiddleCenter);
+      Label("Subtitle", title, "玩家1 + 玩家2  /  同步上挥", new Vector2(0, -28), new Vector2(400, 28), 18, muted, TextAnchor.MiddleCenter);
       var scorePanel = Panel("ScorePanel", canvasGo.transform, new Vector2(1, 1), new Vector2(-225, -105), new Vector2(430, 150), ink);
       ui.scoreText = Label("Score", scorePanel, "分数  0    连击  0", new Vector2(0, 34), new Vector2(400, 40), 26, dark, TextAnchor.MiddleCenter);
       ui.timeText = Label("Time", scorePanel, "时间  30 秒", new Vector2(-100, -30), new Vector2(180, 32), 21, muted, TextAnchor.MiddleCenter);
@@ -436,9 +436,8 @@ namespace GestureFistGame.Editor
 
     private static void CreateWorldGuide(Transform arena)
     {
-      var board = new GameObject("WorldSpaceGuide - 3D提示牌").transform;
-      board.SetParent(arena, false); board.localPosition = new Vector3(0, .3f, 4.35f); board.localRotation = Quaternion.identity;
-      GestureArtUpgrade.PopulateGate(board, "左右双手\n合作抛网");
+      // Keep the playfield open. The control instruction is presented in the
+      // status panel, where it remains legible on both desktop and mobile.
     }
 
     private static void UpdateBuildSettings()

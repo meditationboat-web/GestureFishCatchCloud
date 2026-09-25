@@ -24,6 +24,8 @@ namespace GestureFistGame
     public Button resetButton;
     public Button calibrateButton;
     private float _nextRefresh;
+    private bool _lastLandscape;
+    private bool _layoutInitialized;
 
     private void Awake()
     {
@@ -41,10 +43,14 @@ namespace GestureFistGame
         cameraDebugText.verticalOverflow = VerticalWrapMode.Overflow;
       }
       MakeUiReadable();
+      SetTextByName("Title", "双人合作抛网捕鱼");
+      SetTextByName("Subtitle", "玩家1 + 玩家2  /  同步上挥");
+      ApplyResponsiveLayout(true);
     }
 
     private void Update()
     {
+      ApplyResponsiveLayout(false);
       if (game == null || input == null || Time.unscaledTime < _nextRefresh) return;
       _nextRefresh = Time.unscaledTime + .08f;
       scoreText.text = "分数  " + game.Score + "    连击  " + game.Combo;
@@ -52,7 +58,7 @@ namespace GestureFistGame
       rankText.text = "等级  " + game.Rank;
       statusText.text = game.LastEvent + "\n" + input.Status;
       if (game.spawner != null) statusText.text += "\n" + game.spawner.ValueWindowHint;
-      netText.text = "网状态  " + (game.net != null ? game.net.PhaseName : "-");
+      netText.text = "网状态  " + (game.net != null ? game.net.PhaseName : "-") + "  ·  玩家1下端 / 玩家2上端";
       if (tracker != null && !input.mouseMode)
       {
         statusText.text += "\n" + tracker.Status;
@@ -118,6 +124,81 @@ namespace GestureFistGame
       ResizeChild("StatusPanel", "重新连接摄像头", new Vector2(145, 36), new Vector2(-165, -65));
       ResizeChild("StatusPanel", "手势控制", new Vector2(145, 36), new Vector2(165, -65));
       ResizeChild("StatusPanel", "鼠标测试", new Vector2(145, 36), new Vector2(330, -65));
+    }
+
+    private void ApplyResponsiveLayout(bool force)
+    {
+      var landscape = Screen.width >= Screen.height;
+      if (!force && _layoutInitialized && landscape == _lastLandscape) return;
+      _layoutInitialized = true;
+      _lastLandscape = landscape;
+      var canvas = GetComponent<Canvas>();
+      var scaler = canvas != null ? canvas.GetComponent<CanvasScaler>() : null;
+      if (scaler != null)
+      {
+        scaler.referenceResolution = landscape ? new Vector2(1920, 1080) : new Vector2(1080, 1920);
+        scaler.matchWidthOrHeight = landscape ? .5f : 0f;
+      }
+
+      var status = transform.Find("StatusPanel") as RectTransform;
+      var title = transform.Find("TitleCard") as RectTransform;
+      var score = transform.Find("ScorePanel") as RectTransform;
+      var cameraCard = transform.Find("CameraPanel") as RectTransform;
+      if (landscape)
+      {
+        SetRect(title, new Vector2(320, 84), new Vector2(180, -52), new Vector2(0, 1));
+        SetRect(score, new Vector2(320, 84), new Vector2(-180, -52), new Vector2(1, 1));
+        SetRect(status, new Vector2(760, 112), new Vector2(0, -66), new Vector2(.5f, 1));
+        ResizeChild("StatusPanel", "Status", new Vector2(720, 28), new Vector2(0, 31));
+        ResizeChild("StatusPanel", "NetState", new Vector2(430, 22), new Vector2(0, 5));
+        ResizeChild("StatusPanel", "重新开始", new Vector2(112, 28), new Vector2(-250, -35));
+        ResizeChild("StatusPanel", "重新连接摄像头", new Vector2(135, 28), new Vector2(-95, -35));
+        ResizeChild("StatusPanel", "手势控制", new Vector2(112, 28), new Vector2(95, -35));
+        ResizeChild("StatusPanel", "鼠标测试", new Vector2(112, 28), new Vector2(250, -35));
+        SetRect(cameraCard, new Vector2(230, 175), new Vector2(130, -168), new Vector2(0, 1));
+        ResizeChild("CameraPanel", "CameraPreview", new Vector2(205, 125), new Vector2(0, 19));
+        ResizeChild("CameraPanel", "CameraHint", new Vector2(210, 36), new Vector2(0, -67));
+        SetFont("Title", 24); SetFont("Subtitle", 13); SetFont("Score", 22); SetFont("Time", 16); SetFont("Rank", 16);
+        SetFont("Status", 17); SetFont("NetState", 13); SetFont("CameraHint", 11);
+      }
+      else
+      {
+        SetRect(title, new Vector2(390, 118), new Vector2(205, -76), new Vector2(0, 1));
+        SetRect(score, new Vector2(390, 118), new Vector2(-205, -76), new Vector2(1, 1));
+        SetRect(status, new Vector2(820, 158), new Vector2(0, 128), new Vector2(.5f, 0));
+        ResizeChild("StatusPanel", "Status", new Vector2(780, 54), new Vector2(0, 40));
+        ResizeChild("StatusPanel", "NetState", new Vector2(520, 24), new Vector2(0, 3));
+        ResizeChild("StatusPanel", "重新开始", new Vector2(130, 32), new Vector2(-300, -45));
+        ResizeChild("StatusPanel", "重新连接摄像头", new Vector2(130, 32), new Vector2(-150, -45));
+        ResizeChild("StatusPanel", "手势控制", new Vector2(130, 32), new Vector2(150, -45));
+        ResizeChild("StatusPanel", "鼠标测试", new Vector2(130, 32), new Vector2(300, -45));
+        SetRect(cameraCard, new Vector2(250, 225), new Vector2(135, -300), new Vector2(0, 1));
+        ResizeChild("CameraPanel", "CameraPreview", new Vector2(220, 145), new Vector2(0, 25));
+        ResizeChild("CameraPanel", "CameraHint", new Vector2(225, 40), new Vector2(0, -83));
+        SetFont("Title", 29); SetFont("Subtitle", 15); SetFont("Score", 24); SetFont("Time", 19); SetFont("Rank", 19);
+        SetFont("Status", 20); SetFont("NetState", 17); SetFont("CameraHint", 13);
+      }
+    }
+
+    private void SetRect(RectTransform rect, Vector2 size, Vector2 position, Vector2 anchor)
+    {
+      if (rect == null) return;
+      rect.anchorMin = rect.anchorMax = anchor;
+      rect.pivot = new Vector2(.5f, .5f);
+      rect.sizeDelta = size;
+      rect.anchoredPosition = position;
+    }
+
+    private void SetFont(string objectName, int size)
+    {
+      foreach (var text in GetComponentsInChildren<Text>(true))
+        if (text.gameObject.name == objectName) text.fontSize = size;
+    }
+
+    private void SetTextByName(string objectName, string value)
+    {
+      foreach (var text in GetComponentsInChildren<Text>(true))
+        if (text.gameObject.name == objectName) text.text = value;
     }
 
     private void ResizePanel(string objectName, Vector2 size, Vector2 position)
