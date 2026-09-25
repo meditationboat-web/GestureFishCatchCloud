@@ -46,6 +46,9 @@ namespace GestureFistGame
     {
       if (Input.GetKeyDown(KeyCode.R)) ResetRound();
       if (!IsRunning) return;
+      // 手机首次授权和 MediaPipe 模型加载期间不消耗捕鱼回合时间。
+      // 摄像头失败时也保留画面和诊断文字，方便用户点“重新连接摄像头”。
+      if (input != null && !input.mouseMode && !input.CameraReady) return;
       TimeRemaining -= Time.unscaledDeltaTime;
       if (TimeRemaining <= 0)
       {

@@ -19,6 +19,7 @@ namespace GestureFistGame
     [Range(.02f, .3f)] public float rearmDistance = .075f;
     public string Status { get; private set; } = "鼠标调试模式 · 向上拖动或按空格抛网";
     public bool HandDetected { get; private set; }
+    public bool CameraReady => tracker != null && tracker.CameraReady;
     public float LastHandY { get; private set; }
     public float LastUpwardVelocity { get; private set; }
     public event Action<float> UpwardWaveDetected;
