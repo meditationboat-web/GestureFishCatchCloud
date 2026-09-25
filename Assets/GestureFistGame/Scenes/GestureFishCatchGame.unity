@@ -3259,7 +3259,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: -100}
-  m_SizeDelta: {x: 230, y: 32}
+  m_SizeDelta: {x: 230, y: 52}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &923197694
 MonoBehaviour:
@@ -3294,7 +3294,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: "\u624B\u673A\u7AEF\u53EF\u67E5\u770B\u6444\u50CF\u5934\u72B6\u6001"
+  m_Text: "摄像头诊断：等待启动"
 --- !u!222 &923197695
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -4688,6 +4688,7 @@ MonoBehaviour:
   finishPanel: {fileID: 1239986309}
   cameraPanel: {fileID: 1391935792}
   cameraPreview: {fileID: 234949823}
+  cameraDebugText: {fileID: 923197694}
   gestureButton: {fileID: 833341886}
   mouseButton: {fileID: 119261176}
   resetButton: {fileID: 192623238}

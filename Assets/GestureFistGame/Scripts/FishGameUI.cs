@@ -17,11 +17,30 @@ namespace GestureFistGame
     public GameObject finishPanel;
     public GameObject cameraPanel;
     public RawImage cameraPreview;
+    [Tooltip("手机端相机诊断文字；为空时自动使用 CameraHint 文本")]
+    public Text cameraDebugText;
     public Button gestureButton;
     public Button mouseButton;
     public Button resetButton;
     public Button calibrateButton;
     private float _nextRefresh;
+
+    private void Awake()
+    {
+      // 兼容已经保存的旧场景：无需重新手动拖引用，就能把诊断写入相机卡片。
+      if (cameraDebugText == null && cameraPanel != null)
+      {
+        var hint = cameraPanel.transform.Find("CameraHint");
+        if (hint != null) cameraDebugText = hint.GetComponent<Text>();
+        if (cameraDebugText == null) cameraDebugText = cameraPanel.GetComponentInChildren<Text>(true);
+      }
+      if (cameraDebugText != null)
+      {
+        cameraDebugText.fontSize = 11;
+        cameraDebugText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        cameraDebugText.verticalOverflow = VerticalWrapMode.Overflow;
+      }
+    }
 
     private void Update()
     {
@@ -32,8 +51,16 @@ namespace GestureFistGame
       rankText.text = "等级  " + game.Rank;
       statusText.text = game.LastEvent + "\n" + input.Status;
       netText.text = "网状态  " + (game.net != null ? game.net.PhaseName : "-");
-      if (tracker != null && !input.mouseMode && tracker.CameraReady)
+      if (tracker != null && !input.mouseMode)
+      {
         statusText.text += "\n" + tracker.Status;
+        if (cameraDebugText != null)
+          cameraDebugText.text = tracker.Diagnostics + " | 手=" + (input.HandDetected ? "已识别" : "未识别");
+      }
+      else if (cameraDebugText != null)
+      {
+        cameraDebugText.text = "切换到手势控制后显示摄像头诊断";
+      }
       if (finishPanel != null)
       {
         finishPanel.SetActive(game.IsFinished);

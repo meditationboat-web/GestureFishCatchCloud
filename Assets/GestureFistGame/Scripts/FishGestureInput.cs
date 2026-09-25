@@ -49,7 +49,7 @@ namespace GestureFistGame
       }
       if (Input.GetKeyDown(KeyCode.Space)) TriggerWave("键盘测试");
       if (!HandDetected || Time.unscaledTime - _lastSampleTime > .5f)
-        Status = tracker != null && !tracker.CameraReady ? "摄像头启动中 · 请允许摄像头权限" : "请将一只手放入镜头并向上挥";
+        Status = tracker != null && !tracker.CameraReady ? tracker.Status : "请将一只手放入镜头并向上挥";
       else
         Status = "手部已识别 · " + (game != null && game.net != null ? game.net.PhaseName : "等待");
     }
@@ -67,10 +67,6 @@ namespace GestureFistGame
       HandDetected = false;
       _armed = true;
       _lastSampleTime = -1;
-#if UNITY_ANDROID && !UNITY_EDITOR
-      if (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(UnityEngine.Android.Permission.Camera))
-        UnityEngine.Android.Permission.RequestUserPermission(UnityEngine.Android.Permission.Camera);
-#endif
       if (tracker != null)
       {
         tracker.fishInput = this;

@@ -380,7 +380,7 @@ namespace GestureFistGame.Editor
       var previewPanel = Panel("CameraPanel", canvasGo.transform, new Vector2(0, 1), new Vector2(144, -315), new Vector2(260, 260), ink);
       var previewRect = Rect("CameraPreview", previewPanel, new Vector2(.5f, .5f), new Vector2(0, 20), new Vector2(230, 170));
       ui.cameraPreview = previewRect.gameObject.AddComponent<RawImage>(); tracker.preview = ui.cameraPreview;
-      Label("CameraHint", previewPanel, "手机端可查看摄像头状态", new Vector2(0, -100), new Vector2(230, 32), 12, muted, TextAnchor.MiddleCenter);
+      ui.cameraDebugText = Label("CameraHint", previewPanel, "摄像头诊断：等待启动", new Vector2(0, -100), new Vector2(230, 52), 11, muted, TextAnchor.MiddleCenter);
       ui.cameraPanel = previewPanel.gameObject; previewPanel.gameObject.SetActive(false);
       var finish = Panel("FinishPanel", canvasGo.transform, new Vector2(.5f, .5f), new Vector2(0, 40), new Vector2(460, 270), new Color(.98f, .98f, .98f, .97f));
       ui.finishPanel = finish.gameObject;
