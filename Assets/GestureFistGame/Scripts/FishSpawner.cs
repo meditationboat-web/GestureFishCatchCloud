@@ -13,32 +13,51 @@ namespace GestureFistGame
     public float laneHalfWidth = 3.2f;
     public float minSpeed = 1.3f;
     public float maxSpeed = 2.4f;
+    public string ValueWindowHint
+    {
+      get
+      {
+        int tier = CurrentTier();
+        int value = prototypes == null || prototypes.Length == 0 ? 1 : prototypes[Mathf.Clamp(tier, 0, prototypes.Length - 1)].points;
+        return "当前时段鱼值：" + value + " 分 · 双手合作抓准时机";
+      }
+    }
     private float _nextSpawn;
     private System.Random _random = new System.Random(20260923);
 
     private void Start()
     {
-      PrepareDoroStyles();
+      RemoveLegacyDoroOutlines();
     }
 
-    private void PrepareDoroStyles()
+    private void RemoveLegacyDoroOutlines()
     {
       if (prototypes == null) return;
       foreach (var prototype in prototypes)
       {
         if (prototype == null) continue;
         var style = prototype.GetComponent<DoroFishPresentation>();
-        if (style == null) style = prototype.gameObject.AddComponent<DoroFishPresentation>();
-        style.Configure(OutlineColor(prototype.points));
+        if (style != null) Destroy(style);
+        foreach (var child in prototype.GetComponentsInChildren<Transform>(true))
+          if (child != prototype.transform && child.name.EndsWith("_ValueOutline", System.StringComparison.Ordinal))
+            Destroy(child.gameObject);
       }
     }
 
-    private static Color OutlineColor(int points)
+    private int CurrentTier()
     {
-      if (points <= 1) return new Color(.12f, .75f, 1f, 1f);
-      if (points <= 3) return new Color(1f, .22f, .18f, 1f);
-      if (points <= 5) return new Color(1f, .72f, .08f, 1f);
-      return new Color(1f, .20f, .80f, 1f);
+      if (game == null || prototypes == null || prototypes.Length == 0) return 0;
+      float elapsed = Mathf.Max(0f, game.roundSeconds - game.TimeRemaining);
+      return Mathf.Clamp(Mathf.FloorToInt(elapsed / Mathf.Max(1f, game.roundSeconds / (float)prototypes.Length)), 0, prototypes.Length - 1);
+    }
+
+    private FishTarget ChoosePrototype()
+    {
+      int tier = CurrentTier();
+      // The current time band determines the main value. A small chance of
+      // the previous band keeps the river lively without recoloring Doro.
+      if (tier > 0 && _random.NextDouble() < .25) tier--;
+      return prototypes[Mathf.Clamp(tier, 0, prototypes.Length - 1)];
     }
 
     private void Update()
@@ -60,7 +79,7 @@ namespace GestureFistGame
 
     private void SpawnOne()
     {
-      var source = prototypes[_random.Next(prototypes.Length)];
+      var source = ChoosePrototype();
       var fish = Instantiate(source, transform);
       fish.game = game;
       fish.transform.position = new Vector3(spawnX, .7f, UnityEngine.Random.Range(-laneHalfWidth, laneHalfWidth));
