@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace GestureFistGame
@@ -29,6 +30,12 @@ namespace GestureFistGame
 
     private void Awake()
     {
+      // Older serialized scenes may not have kept every script reference.
+      // Resolve the core controllers locally so a missing optional UI binding
+      // cannot prevent the fishing loop from starting.
+      if (game == null) game = FindObjectOfType<FishGameController>();
+      if (input == null) input = FindObjectOfType<FishGestureInput>();
+      if (tracker == null) tracker = FindObjectOfType<MediaPipeTracker>();
       // 兼容已经保存的旧场景：无需重新手动拖引用，就能把诊断写入相机卡片。
       if (cameraDebugText == null && cameraPanel != null)
       {
@@ -45,6 +52,10 @@ namespace GestureFistGame
       MakeUiReadable();
       SetTextByName("Title", "双人合作抛网捕鱼");
       SetTextByName("Subtitle", "玩家1 + 玩家2  /  同步上挥");
+      DisableKeyboardSubmit(resetButton);
+      DisableKeyboardSubmit(gestureButton);
+      DisableKeyboardSubmit(mouseButton);
+      DisableKeyboardSubmit(calibrateButton);
       ApplyResponsiveLayout(true);
     }
 
@@ -53,15 +64,18 @@ namespace GestureFistGame
       ApplyResponsiveLayout(false);
       if (game == null || input == null || Time.unscaledTime < _nextRefresh) return;
       _nextRefresh = Time.unscaledTime + .08f;
-      scoreText.text = "分数  " + game.Score + "    连击  " + game.Combo;
-      timeText.text = "时间  " + Mathf.CeilToInt(game.TimeRemaining).ToString("00") + " 秒";
-      rankText.text = "等级  " + game.Rank;
-      statusText.text = game.LastEvent + "\n" + input.Status;
-      if (game.spawner != null) statusText.text += "\n" + game.spawner.ValueWindowHint;
-      netText.text = "网状态  " + (game.net != null ? game.net.PhaseName : "-") + "  ·  玩家1下端 / 玩家2上端";
+      if (scoreText != null) scoreText.text = "分数  " + game.Score + "    连击  " + game.Combo;
+      if (timeText != null) timeText.text = "时间  " + Mathf.CeilToInt(game.TimeRemaining).ToString("00") + " 秒";
+      if (rankText != null) rankText.text = "等级  " + game.Rank;
+      if (statusText != null)
+      {
+        statusText.text = game.LastEvent + "\n" + input.Status;
+        if (game.spawner != null) statusText.text += "\n" + game.spawner.ValueWindowHint;
+      }
+      if (netText != null) netText.text = "网状态  " + (game.net != null ? game.net.PhaseName : "-") + "  ·  玩家1下端 / 玩家2上端";
       if (tracker != null && !input.mouseMode)
       {
-        statusText.text += "\n" + tracker.Status;
+        if (statusText != null) statusText.text += "\n" + tracker.Status;
         if (cameraDebugText != null)
           cameraDebugText.text = tracker.Diagnostics + " | 手=" + input.DetectedHands + "/2" + (input.BothHandsDetected ? " 合作就绪" : " 等待另一只");
       }
@@ -81,10 +95,23 @@ namespace GestureFistGame
       if (calibrateButton != null) calibrateButton.interactable = !input.mouseMode;
     }
 
-    public void UseGesture() { input?.UseCamera(); }
-    public void UseMouse() { input?.UseMouse(); }
-    public void ResetRound() { game?.ResetRound(); }
-    public void Calibrate() { input?.UseCamera(); }
+    public void UseGesture() { input?.UseCamera(); ClearUiSelection(); }
+    public void UseMouse() { input?.UseMouse(); ClearUiSelection(); }
+    public void ResetRound() { game?.ResetRound(); ClearUiSelection(); }
+    public void Calibrate() { input?.UseCamera(); ClearUiSelection(); }
+
+    private static void DisableKeyboardSubmit(Button button)
+    {
+      if (button == null) return;
+      var navigation = button.navigation;
+      navigation.mode = Navigation.Mode.None;
+      button.navigation = navigation;
+    }
+
+    private static void ClearUiSelection()
+    {
+      if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
+    }
 
     private void MakeUiReadable()
     {

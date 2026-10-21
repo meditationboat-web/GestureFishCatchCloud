@@ -32,6 +32,14 @@ namespace GestureFistGame
     {
       var water = FindNamed("WaterChannel_RightToLeft", "WaterChannel");
       SetTransform(water, new Vector3(0, 0, 0), new Vector3(8.4f, .25f, 8));
+      ApplyWaterSurface(water);
+      var arena = FindNamed("Arena - 水道与草岸");
+      StylizedIslandRuntimeBuilder.Ensure(arena);
+      EnsureOpenMeadow(arena);
+      // Newly rebuilt scenes own their island dressing. Keep the legacy
+      // runtime enhancer only for older scenes that have no authored island.
+      if (arena != null && arena.Find("StylizedIslandEnvironment") == null)
+        RiverEnvironmentEnhancer.Ensure(arena);
       var left = FindNamed("LeftGrassBank");
       SetTransform(left, new Vector3(-4.8f, .25f, 0), new Vector3(.8f, .5f, 8));
       var right = FindNamed("RightGrassBank");
@@ -41,31 +49,118 @@ namespace GestureFistGame
       SetTransform(FindNamed("StartBank", "NearBank"), new Vector3(0, .28f, -4.3f), new Vector3(10, .55f, 1.0f));
       SetTransform(FindNamed("EndBank", "FarBank"), new Vector3(0, .28f, 4.3f), new Vector3(10, .55f, 1.0f));
       for (int i = 0; i < 10; i++)
-        SetTransform(FindNamed("WaterLine_" + i), new Vector3(0, .14f, -3.6f + i * .8f), new Vector3(8.1f, .018f, .025f));
+      {
+        var line = FindNamed("WaterLine_" + i);
+        if (line != null) line.gameObject.SetActive(false);
+      }
+    }
+
+    private static void EnsureOpenMeadow(Transform arena)
+    {
+      if (arena == null || arena.Find("StylizedIslandEnvironment") != null || arena.Find("MeadowGround") != null || arena.Find("GeneratedMeadow") != null) return;
+      var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
+      if (shader == null) return;
+      var meadow = new Material(shader) { name = "Runtime Open Meadow" };
+      meadow.color = new Color(.18f, .42f, .16f, 1f);
+      if (meadow.HasProperty("_Smoothness")) meadow.SetFloat("_Smoothness", .08f);
+      CreatePrimitive("MeadowGround", PrimitiveType.Cube, arena, new Vector3(0, -.12f, 0), new Vector3(32f, .24f, 26f), meadow);
+      var light = new Material(shader) { name = "Runtime Meadow Light" };
+      light.color = new Color(.28f, .56f, .20f, 1f);
+      var dark = new Material(shader) { name = "Runtime Meadow Dark" };
+      dark.color = new Color(.12f, .30f, .13f, 1f);
+      var positions = new[]
+      {
+        new Vector3(-10.8f, .025f, -7.4f), new Vector3(10.6f, .025f, -7.8f),
+        new Vector3(-11.8f, .025f, 6.8f), new Vector3(11.7f, .025f, 7.2f),
+        new Vector3(-7.4f, .025f, -10.2f), new Vector3(7.8f, .025f, 10.0f),
+        new Vector3(-13.4f, .025f, .4f), new Vector3(13.1f, .025f, -.8f)
+      };
+      for (int i = 0; i < positions.Length; i++)
+      {
+        var patch = CreatePrimitive("MeadowPatch_" + i, PrimitiveType.Sphere, arena, positions[i],
+          new Vector3(3.8f + (i % 3) * .7f, .045f, 2.2f + (i % 2) * .55f), i % 3 == 0 ? dark : light);
+        patch.transform.localRotation = Quaternion.Euler(0, i * 23f, 0);
+      }
     }
 
     private static void ApplyNet()
     {
       var net = FindObjectOfType<FishNetController>();
       if (net == null) return;
-      net.transform.localPosition = new Vector3(0, .65f, 0);
+      net.transform.localPosition = Vector3.zero;
+      net.transform.localRotation = Quaternion.identity;
+      net.transform.localScale = Vector3.one;
+      net.name = "Net - 水平抬网";
       var trigger = net.GetComponent<BoxCollider>();
-      if (trigger != null) { trigger.center = new Vector3(0, .45f, 0); trigger.size = new Vector3(1.20f, 2.45f, 9.1f); }
-      // Extend beyond both banks so the net visibly spans the complete river.
-      SetTransform(FindChild(net.transform, "NetPanel_Vertical", "NetPanel"), new Vector3(0, .70f, 0), new Vector3(1.15f, 2.25f, 9.0f));
-      SetTransform(FindChild(net.transform, "NetFrontPost", "NetLeftPost"), new Vector3(0, .70f, -4.45f), new Vector3(.14f, 1.2f, .14f));
-      SetTransform(FindChild(net.transform, "NetBackPost", "NetRightPost"), new Vector3(0, .70f, 4.45f), new Vector3(.14f, 1.2f, .14f));
-      SetTransform(FindChild(net.transform, "NetTop_Vertical", "NetTop"), new Vector3(0, 1.88f, 0), new Vector3(1.25f, .12f, 9.1f));
+      if (trigger != null) { trigger.center = FishNetGeometry.TriggerCenter; trigger.size = FishNetGeometry.TriggerSize; }
+      var panel = FindChild(net.transform, "RopeNetVisual", "NetPanel_Vertical", "NetPanel");
+      var marker = FindChild(net.transform, "NetSubmergedMarker");
+      // Remove the legacy second net even when an older serialized scene is
+      // loaded.  The active rope grid is the only net shown in this scene.
+      if (marker != null)
+      {
+        marker.gameObject.SetActive(false);
+        Object.Destroy(marker.gameObject);
+        marker = null;
+      }
+      // Migrate old wall-shaped nets to the same geometry used by the editor.
+      if (panel == null || panel.Find("RopeNet_X_0") == null)
+      {
+        var source = panel != null ? panel.GetComponentInChildren<Renderer>(true) : null;
+        var rope = source != null ? source.sharedMaterial : null;
+        if (rope == null)
+        {
+          var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+          rope = new Material(shader) { color = new Color(.1f, .82f, .95f) };
+        }
+        var edge = new Material(rope) { color = new Color(1f, .7f, .08f) };
+        if (panel != null) { panel.gameObject.SetActive(false); Destroy(panel.gameObject); }
+        panel = FishNetGeometry.Create(net.transform, "RopeNetVisual", rope, edge, false);
+      }
+      foreach (var oldName in new[] { "NetFrontPost", "NetBackPost", "NetLeftPost", "NetRightPost", "NetTop_Vertical", "NetTop" })
+      {
+        var old = net.transform.Find(oldName);
+        if (old != null) { old.gameObject.SetActive(false); Destroy(old.gameObject); }
+      }
+      SetTransform(panel, Vector3.zero, Vector3.one);
+      panel.localRotation = Quaternion.identity;
+      net.visual = panel;
+      net.SetSubmergedVisual(null);
+      net.ConfigureLayout(FishNetGeometry.RestHeight, FishNetGeometry.RaisedHeight);
+    }
+
+    private static void ApplyWaterSurface(Transform water)
+    {
+      if (water == null) return;
+      var surface = water.GetComponent<InteractiveWaterSurface>();
+      if (surface == null) surface = water.gameObject.AddComponent<InteractiveWaterSurface>();
+      surface.width = 8.4f;
+      surface.depth = 8f;
+      surface.columns = 56;
+      surface.rows = 40;
+      surface.circular = false;
+      surface.enableRenderTextureRipples = true;
+      surface.rippleMapResolution = 128;
+      surface.rippleLifetime = 1.35f;
+      // Keep the previously accepted water look. The E package remains in the
+      // project for reference, but this game scene uses its original custom
+      // InteractiveWater shader after the material comparison.
+      surface.waterMaterialOverride = null;
+      surface.waterShader = Shader.Find("GestureFistGame/InteractiveWater");
+      var ripple = water.GetComponent<WaterRippleRenderTexture>();
+      if (ripple == null) ripple = water.gameObject.AddComponent<WaterRippleRenderTexture>();
+      ripple.resolution = surface.rippleMapResolution;
+      ripple.lifetime = surface.rippleLifetime;
     }
 
     private static void ApplyCamera()
     {
       var camera = FindNamed("Main Camera");
       if (camera == null) return;
-      camera.position = new Vector3(0, 12.8f, -12.8f);
+      camera.position = new Vector3(9.4f, 13.8f, -13.6f);
       camera.LookAt(new Vector3(0, .45f, 0));
       var component = camera.GetComponent<Camera>();
-      if (component != null) { component.orthographic = true; component.orthographicSize = 7.6f; }
+      if (component != null) { component.orthographic = true; component.orthographicSize = 8.05f; }
     }
 
     private static void ApplyWorldGuide()
@@ -98,10 +193,10 @@ namespace GestureFistGame
       if (arena == null) return;
       var lower = FindNamed("玩家1", "左侧玩家小人", "下方玩家小人");
       var upper = FindNamed("玩家2", "右侧玩家小人", "上方玩家小人");
-      if (lower == null) lower = CreateAvatar(arena, "玩家1", new Vector3(0, .25f, -4.15f), new Color(.12f, .8f, 1f), false);
-      if (upper == null) upper = CreateAvatar(arena, "玩家2", new Vector3(0, .25f, 4.15f), new Color(1f, .7f, .1f), true);
-      ConfigureAvatar(lower, "玩家1", new Vector3(0, .25f, -4.15f), false);
-      ConfigureAvatar(upper, "玩家2", new Vector3(0, .25f, 4.15f), true);
+      if (lower == null) lower = CreateAvatar(arena, "玩家1", new Vector3(0, .25f, -4.68f), new Color(.12f, .8f, 1f), true);
+      if (upper == null) upper = CreateAvatar(arena, "玩家2", new Vector3(0, .25f, 4.68f), new Color(1f, .7f, .1f), false);
+      ConfigureAvatar(lower, "玩家1", new Vector3(0, .25f, -4.68f), true);
+      ConfigureAvatar(upper, "玩家2", new Vector3(0, .25f, 4.68f), false);
     }
 
     private static Transform CreateAvatar(Transform parent, string name, Vector3 position, Color accent, bool faceAwayFromCamera)
@@ -109,23 +204,30 @@ namespace GestureFistGame
       var root = new GameObject(name).transform;
       root.SetParent(parent, false); root.localPosition = position;
       root.localRotation = Quaternion.Euler(0, faceAwayFromCamera ? 180f : 0f, 0);
-      var shader = Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
+      var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
       if (shader == null) return null;
       var material = new Material(shader); material.color = accent; material.name = name + " Accent";
       var bodyMaterial = new Material(shader); bodyMaterial.color = new Color(.96f, .96f, .93f); bodyMaterial.name = name + " Body";
       CreatePrimitive("AvatarBody", PrimitiveType.Capsule, root, new Vector3(0, .9f, 0), new Vector3(.58f, .82f, .58f), material);
       CreatePrimitive("AvatarHead", PrimitiveType.Sphere, root, new Vector3(0, 1.9f, 0), new Vector3(.62f, .62f, .62f), bodyMaterial);
-      CreatePrimitive("AvatarArmA", PrimitiveType.Capsule, root, new Vector3(.48f, 1.25f, -.28f), new Vector3(.18f, .68f, .18f), bodyMaterial).transform.localRotation = Quaternion.Euler(0, 0, -48f);
-      CreatePrimitive("AvatarArmB", PrimitiveType.Capsule, root, new Vector3(.48f, 1.25f, .28f), new Vector3(.18f, .68f, .18f), bodyMaterial).transform.localRotation = Quaternion.Euler(0, 0, -48f);
-      CreatePrimitive("AvatarHandA", PrimitiveType.Sphere, root, new Vector3(.95f, 1.55f, -.28f), new Vector3(.24f, .24f, .24f), material);
-      CreatePrimitive("AvatarHandB", PrimitiveType.Sphere, root, new Vector3(.95f, 1.55f, .28f), new Vector3(.24f, .24f, .24f), material);
+      var armA = CreatePrimitive("AvatarArmA", PrimitiveType.Capsule, root, new Vector3(-.28f, 1.24f, 0), new Vector3(.18f, .68f, .18f), bodyMaterial);
+      var armB = CreatePrimitive("AvatarArmB", PrimitiveType.Capsule, root, new Vector3(.28f, 1.24f, 0), new Vector3(.18f, .68f, .18f), bodyMaterial);
+      armA.transform.localRotation = Quaternion.Euler(position.z > 0 ? 24f : -24f, 0, 0);
+      armB.transform.localRotation = Quaternion.Euler(position.z > 0 ? 24f : -24f, 0, 0);
+      var handA = CreatePrimitive("AvatarHandA", PrimitiveType.Sphere, root, Vector3.zero, new Vector3(.24f, .24f, .24f), material);
+      handA.transform.SetParent(armA.transform, false); handA.transform.localPosition = new Vector3(0, .72f, 0);
+      var handB = CreatePrimitive("AvatarHandB", PrimitiveType.Sphere, root, Vector3.zero, new Vector3(.24f, .24f, .24f), material);
+      handB.transform.SetParent(armB.transform, false); handB.transform.localPosition = new Vector3(0, .72f, 0);
       CreatePrimitive("AvatarLegA", PrimitiveType.Capsule, root, new Vector3(0, .35f, -.2f), new Vector3(.20f, .45f, .20f), bodyMaterial);
       CreatePrimitive("AvatarLegB", PrimitiveType.Capsule, root, new Vector3(0, .35f, .2f), new Vector3(.20f, .45f, .20f), bodyMaterial);
       CreatePrimitive("AvatarBase", PrimitiveType.Cylinder, root, new Vector3(0, .08f, 0), new Vector3(.85f, .10f, .85f), bodyMaterial);
-      var label = new GameObject("AvatarLabel", typeof(TextMesh));
-      label.transform.SetParent(root, false); label.transform.localPosition = new Vector3(0, 2.15f, 0); label.transform.localRotation = Quaternion.Euler(58f, 0, 0);
-      var text = label.GetComponent<TextMesh>(); text.text = name; text.characterSize = .12f; text.fontSize = 36; text.anchor = TextAnchor.MiddleCenter; text.alignment = TextAlignment.Center; text.color = new Color(.1f, .15f, .2f);
-      label.AddComponent<FishWorldLabel>();
+      var avatar = root.gameObject.AddComponent<FishPlayerAvatar>();
+      avatar.handSide = name == "玩家1" ? FishGestureInput.HandSide.Left : FishGestureInput.HandSide.Right;
+      avatar.netDirection = position.z < 0 ? 1f : -1f;
+      avatar.gestureArm = name == "玩家1" ? armB.transform : armA.transform;
+      avatar.supportArm = name == "玩家1" ? armA.transform : armB.transform;
+      avatar.bodyVisual = root.Find("AvatarBody");
+      avatar.ragdoll = root.gameObject.AddComponent<FishAvatarRagdoll>();
       return root;
     }
 
@@ -136,8 +238,7 @@ namespace GestureFistGame
       avatar.localPosition = position;
       avatar.localRotation = Quaternion.Euler(0, faceAwayFromCamera ? 180f : 0f, 0);
       var label = avatar.Find("AvatarLabel");
-      var text = label != null ? label.GetComponent<TextMesh>() : null;
-      if (text != null) text.text = displayName;
+      if (label != null) Destroy(label.gameObject);
     }
 
     private static GameObject CreatePrimitive(string name, PrimitiveType type, Transform parent, Vector3 position, Vector3 scale, Material material)

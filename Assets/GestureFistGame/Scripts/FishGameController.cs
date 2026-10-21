@@ -83,6 +83,8 @@ namespace GestureFistGame
       IsFinished = false;
       IsRunning = true;
       LastEvent = "左右双手一起向上挥，把鱼网抛起来";
+      input?.ResetForRound();
+      foreach (var ragdoll in FindObjectsOfType<FishAvatarRagdoll>()) ragdoll.ResetMotion();
       net?.ResetNet();
       spawner?.ResetSpawner();
     }

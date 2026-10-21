@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: Fish_GrassStylized
+  m_Shader: {fileID: 4800000, guid: 62e0c40c6eb8b744eb3e07c2b945f459, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs: []
+    m_Ints: []
+    m_Floats:
+    - _Cutoff: 0.25
+    - _HeightRange: 1
+    - _RimPower: 3.2
+    - _VariationStrength: 0.16
+    - _WindScale: 0.72
+    - _WindSpeed: 1.15
+    - _WindStrength: 0.045
+    m_Colors:
+    - _BaseColor: {r: 0.055, g: 0.28, b: 0.075, a: 1}
+    - _RimColor: {r: 0.7, g: 0.98, b: 0.28, a: 1}
+    - _TipColor: {r: 0.58, g: 0.9, b: 0.16, a: 1}
+  m_BuildTextureStacks: []

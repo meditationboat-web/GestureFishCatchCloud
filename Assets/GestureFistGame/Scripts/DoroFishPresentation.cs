@@ -42,7 +42,7 @@ namespace GestureFistGame
           return;
         }
       }
-      var shader = Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
+      var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
       if (shader == null) return;
       _outlineMaterial = new Material(shader);
       _outlineMaterial.name = name + " Outline Material";

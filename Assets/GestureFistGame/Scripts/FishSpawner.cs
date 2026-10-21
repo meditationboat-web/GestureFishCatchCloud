@@ -71,7 +71,13 @@ namespace GestureFistGame
     public void ResetSpawner()
     {
       foreach (var fish in FindObjectsOfType<FishTarget>())
-        if (fish.transform.IsChildOf(transform)) Destroy(fish.gameObject);
+      {
+        if (!fish.transform.IsChildOf(transform)) continue;
+        // Stop the old fish immediately so a reset cannot leave one active for
+        // the rest of the frame while the new round accepts keyboard input.
+        fish.gameObject.SetActive(false);
+        Destroy(fish.gameObject);
+      }
       _nextSpawn = Time.unscaledTime + .4f;
     }
 
@@ -84,9 +90,9 @@ namespace GestureFistGame
       fish.game = game;
       fish.transform.position = new Vector3(spawnX, .7f, UnityEngine.Random.Range(-laneHalfWidth, laneHalfWidth));
       fish.speed = UnityEngine.Random.Range(minSpeed, maxSpeed) * (1f + game.Catches * .006f);
-      // Doro's face points in the same direction as its travel (right to left)
-      // instead of toward the near/bottom bank.
-      fish.transform.rotation = Quaternion.Euler(0, 270, 0);
+      // The Doro asset's forward axis is opposite to its travel axis. Rotate
+      // it so the face is visibly left while the fish crosses right-to-left.
+      fish.transform.rotation = Quaternion.Euler(0, 90, 0);
       fish.gameObject.SetActive(true);
     }
   }

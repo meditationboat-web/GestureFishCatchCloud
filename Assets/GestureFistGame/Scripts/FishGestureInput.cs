@@ -36,6 +36,7 @@ namespace GestureFistGame
     public float LastHandY { get; private set; }
     public float LastUpwardVelocity { get; private set; }
     public event Action<float> UpwardWaveDetected;
+    public event Action<HandSide> HandWaveDetected;
 
     private sealed class HandState
     {
@@ -129,14 +130,14 @@ namespace GestureFistGame
       DetectedHands = Mathf.Min(2, samples.Count);
       HandDetected = DetectedHands > 0;
       BothHandsDetected = DetectedHands >= 2;
-      if (samples.Count > 0) ProcessHand(_left, samples[0], now);
+      if (samples.Count > 0) ProcessHand(_left, HandSide.Left, samples[0], now);
       else MarkMissing(_left, now);
-      if (samples.Count > 1) ProcessHand(_right, samples[samples.Count - 1], now);
+      if (samples.Count > 1) ProcessHand(_right, HandSide.Right, samples[samples.Count - 1], now);
       else MarkMissing(_right, now);
       LastHandY = samples.Count == 0 ? LastHandY : samples[0].y;
     }
 
-    private void ProcessHand(HandState state, Vector2 palm, float now)
+    private void ProcessHand(HandState state, HandSide side, Vector2 palm, float now)
     {
       state.seen = true;
       if (state.lastSampleTime > 0f)
@@ -154,6 +155,7 @@ namespace GestureFistGame
           state.lastTriggerY = palm.y;
           state.waveTime = now;
           _cooldownUntil = now + gestureCooldown;
+          HandWaveDetected?.Invoke(side);
           if (!requireTwoHands) CompleteWave("手势上挥", velocity);
           else TryCompleteCooperativeWave(velocity);
         }
@@ -207,6 +209,7 @@ namespace GestureFistGame
       if (now < _cooldownUntil && state.waveTime >= 0f) return;
       state.waveTime = now;
       state.armed = false;
+      HandWaveDetected?.Invoke(side);
       if (!requireTwoHands) CompleteWave("鼠标上挥", 1f);
       else TryCompleteCooperativeWave(1f);
     }
@@ -214,6 +217,11 @@ namespace GestureFistGame
     public bool TriggerWave(string source)
     {
       return game != null && game.TryThrow(source);
+    }
+
+    public void ResetForRound()
+    {
+      ResetHands();
     }
 
     private void ResetHands()
