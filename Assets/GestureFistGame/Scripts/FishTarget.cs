@@ -77,6 +77,7 @@ namespace GestureFistGame
 
     private void FixedUpdate()
     {
+      var previousBounds = VisualBounds;
       if (Caught && _launched)
       {
         _launchTime += Time.fixedDeltaTime;
@@ -87,7 +88,7 @@ namespace GestureFistGame
         p.x += Mathf.Sin(_launchTime * 15f) * .012f;
         transform.position = p;
         transform.Rotate(0, 240f * Time.fixedDeltaTime, 180f * Time.fixedDeltaTime, Space.Self);
-        if (_launchTime >= launchDuration) Destroy(gameObject);
+        if (!RemoveOnGround(previousBounds) && _launchTime >= launchDuration) Destroy(gameObject);
         return;
       }
       if (Caught) return;
@@ -95,12 +96,36 @@ namespace GestureFistGame
       // Keep the fish on the water lane's z range and remove it after the left bank.
       transform.position += Vector3.left * speed * Time.fixedDeltaTime;
       FollowWater(false);
+      if (RemoveOnGround(previousBounds)) return;
       if (_water != null && Time.frameCount % 6 == 0) _water.AddRipple(transform.position, .012f);
       if (transform.position.x < -4.7f)
       {
         game?.MissedFish();
         Destroy(gameObject);
       }
+    }
+
+    // Sweep the rendered body, since these kinematic fish move by transform.
+    // Ground-only filtering keeps the net trigger and water from deleting fish.
+    private bool RemoveOnGround(Bounds previous)
+    {
+      var current = VisualBounds;
+      var half = Vector3.Max(previous.extents, current.extents) + Vector3.one * .015f;
+      var delta = current.center - previous.center;
+      foreach (var hit in Physics.BoxCastAll(previous.center, half, delta.normalized,
+        Quaternion.identity, delta.magnitude, ~0, QueryTriggerInteraction.Ignore))
+        if (hit.collider.GetComponent<FishGroundSurface>() != null) return DespawnOnGround();
+      foreach (var collider in Physics.OverlapBox(current.center, half, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore))
+        if (collider.GetComponent<FishGroundSurface>() != null) return DespawnOnGround();
+      return false;
+    }
+
+    private bool DespawnOnGround()
+    {
+      if (!Caught) game?.MissedFish();
+      gameObject.SetActive(false);
+      Destroy(gameObject);
+      return true;
     }
 
     public void MarkCaught()

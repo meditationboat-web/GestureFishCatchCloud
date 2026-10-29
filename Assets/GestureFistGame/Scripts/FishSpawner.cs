@@ -8,7 +8,7 @@ namespace GestureFistGame
     public FishTarget[] prototypes;
     public float spawnInterval = .72f;
     [Tooltip("鱼从画面右侧进入")]
-    public float spawnX = 4.1f;
+    public float spawnX = 3.55f;
     [Tooltip("水道在屏幕上下方向的半宽")]
     public float laneHalfWidth = 3.2f;
     public float minSpeed = 1.3f;
@@ -17,9 +17,7 @@ namespace GestureFistGame
     {
       get
       {
-        int tier = CurrentTier();
-        int value = prototypes == null || prototypes.Length == 0 ? 1 : prototypes[Mathf.Clamp(tier, 0, prototypes.Length - 1)].points;
-        return "当前时段鱼值：" + value + " 分 · 双手合作抓准时机";
+        return "红眼鱼 1分   金鱼 3分   狗鱼 5分";
       }
     }
     private float _nextSpawn;
@@ -53,11 +51,10 @@ namespace GestureFistGame
 
     private FishTarget ChoosePrototype()
     {
-      int tier = CurrentTier();
-      // The current time band determines the main value. A small chance of
-      // the previous band keeps the river lively without recoloring Doro.
-      if (tier > 0 && _random.NextDouble() < .25) tier--;
-      return prototypes[Mathf.Clamp(tier, 0, prototypes.Length - 1)];
+      // All three species can appear throughout the round.
+      double roll = _random.NextDouble();
+      int index = roll < .5 ? 0 : roll < .82 ? 1 : 2;
+      return prototypes[Mathf.Min(index, prototypes.Length - 1)];
     }
 
     private void Update()

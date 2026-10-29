@@ -51,6 +51,13 @@ namespace GestureFistGame
           Quaternion.Angle(beforeRight, avatars[1].gestureArm.localRotation) < 3f)
         Fail("two-handed throwing animation did not move");
       game.net.ResetNet();
+      game.input.ResetForRound();
+      game.input.RegisterMouseWave(FishGestureInput.HandSide.Left);
+      yield return new WaitForSecondsRealtime(.85f);
+      game.input.RegisterMouseWave(FishGestureInput.HandSide.Right);
+      if (game.net.CanThrow) Fail("expanded cooperation window rejected .85 second hand gap");
+      Debug.Log("COOPERATION_WINDOW_PASS seconds=" + game.input.cooperationWindow + " gap=.85");
+      game.net.ResetNet();
       bool first = game.TryThrow("自动化测试");
       bool blocked = !game.TryThrow("重复测试");
       if (!first || !blocked) Fail("throw state machine failed");
@@ -66,7 +73,9 @@ namespace GestureFistGame
       fish.game = game;
       fish.speed = 0;
       // Away from the old narrow wall: this must be caught by the wide surface.
-      fish.transform.position = new Vector3(FishNetGeometry.HalfWidth * .65f, 0f, FishNetGeometry.HalfDepth * .65f);
+      var insideNet = game.net.visual.TransformPoint(new Vector3(FishNetGeometry.HalfWidth * .65f, 0f, FishNetGeometry.HalfDepth * .65f));
+      insideNet.y = 0f;
+      fish.transform.position = insideNet;
       var outside = Instantiate(game.spawner.prototypes[0], game.spawner.transform);
       outside.gameObject.SetActive(true);
       outside.game = game;
@@ -77,8 +86,8 @@ namespace GestureFistGame
       if (game.Catches != 0) Fail("idle net caught fish");
       if (!game.TryThrow("自动化捕获测试")) Fail("second throw failed");
       yield return new WaitForSecondsRealtime(.12f);
-      if (!fish.Caught || outside.Caught || game.Score != points || game.Catches != 1)
-        Fail("horizontal overlap catch or outside rejection failed");
+      if (fish == null || !fish.Caught || (outside != null && outside.Caught) || game.Score != points || game.Catches != 1)
+        Fail("horizontal overlap catch or outside rejection failed score=" + game.Score + " catches=" + game.Catches + " fish=" + (fish != null ? fish.Caught.ToString() : "removed") + " bounds=" + (fish != null ? fish.VisualBounds.ToString() : "none"));
       yield return new WaitForSecondsRealtime(.8f);
       if (!game.net.CanThrow || !game.net.visual.gameObject.activeSelf ||
           (game.net.submergedVisual != null && game.net.submergedVisual.gameObject.activeSelf))
@@ -103,3 +112,5 @@ namespace GestureFistGame
     }
   }
 }
+
+

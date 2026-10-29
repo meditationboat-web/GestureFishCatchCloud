@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -57,6 +57,7 @@ namespace GestureFistGame.Editor
       spawner.game = game;
       spawnerGo.transform.position = new Vector3(0, .7f, 0);
       spawner.prototypes = CreateFishPrototypes(spawnerGo.transform, game);
+      FishSpeciesCatalog.Replace(spawner);
 
       var tracking = new GameObject("TrackingSystem - MediaPipe 手势");
       tracking.transform.SetParent(root.transform, false);
@@ -72,7 +73,7 @@ namespace GestureFistGame.Editor
       tracker.input = null;
       tracker.fishInput = input;
       tracker.autoStart = false;
-      tracker.usePose = false;
+      tracker.usePose = true;
       tracker.inferenceFps = 20;
       mouse.game = game;
 
@@ -156,7 +157,7 @@ namespace GestureFistGame.Editor
           if (Mathf.Abs(strand.GetPosition(i).y) > .06f)
             throw new Exception("鱼网绳索仍偏离水平网面");
       if (net.restHeight > -.08f) throw new Exception("休息状态渔网没有低于鱼的水下位置");
-      if (spawner.prototypes == null || spawner.prototypes.Length < 4) throw new Exception("鱼种原型不足");
+      if (spawner.prototypes == null || spawner.prototypes.Length != 3) throw new Exception("鱼种原型不足");
       if (net.game != game || spawner.game != game || input.game != game || tracker.fishInput != input)
         throw new Exception("捕鱼场景脚本引用未连接");
       if (!input.requireTwoHands) throw new Exception("双手合作模式未启用");
@@ -164,7 +165,7 @@ namespace GestureFistGame.Editor
       File.WriteAllText("Artifacts/fish-scene-validation.txt",
         "Scene: " + scene.path + "\nObjects: " + objects.Length + "\nFish prototypes: " + spawner.prototypes.Length +
         "\nFish direction: right-to-left\nNet: horizontal surface trigger\nTwo-hand cooperation: " + input.cooperationWindow.ToString("0.00") + " seconds\n" +
-        "Fish catch loop: linked\nCentral overlap catch scan: linked\nInteractive water: original GestureFistGame shader + URP shallow-water height/flow simulation + mass conservation + render-texture ripples\nRope net: one grid mesh, visible underwater at idle and raised during the two-hand throw\nOpen meadow: 32x26 ground + layered outer scenery\nIsland props: trees=" + islandTreeCount + " rocks=" + islandRockCount + " tufts=" + islandTuftCount + " legacyKayKit=" + kayKitCount + " legacyGrass=" + grassCount + " stylized grass shader=linked\nPlayer avatars: " + avatars.Length + " hand-specific throw animations\nMediaPipe hand input: linked\nMouse fallback: linked\nMobile camera: usePose=false, 20 FPS\n");
+        "Fish catch loop: linked\nCentral overlap catch scan: linked\nInteractive water: original GestureFistGame shader + URP shallow-water height/flow simulation + mass conservation + render-texture ripples\nRope net: one grid mesh, visible underwater at idle and raised during the two-hand throw\nOpen meadow: 32x26 ground + layered outer scenery\nIsland props: trees=" + islandTreeCount + " rocks=" + islandRockCount + " tufts=" + islandTuftCount + " legacyKayKit=" + kayKitCount + " legacyGrass=" + grassCount + " stylized grass shader=linked\nPlayer avatars: " + avatars.Length + " hand-specific throw animations\nMediaPipe pose raised-arm input: linked\nMouse fallback: linked\nMobile camera: pose-only, max 2 people, 20 FPS\n");
       Debug.Log("FISH_SCENE_VALIDATED objects=" + objects.Length + " fishPrototypes=" + spawner.prototypes.Length);
     }
 
@@ -344,9 +345,9 @@ namespace GestureFistGame.Editor
       float bankX = 4.2f + bankWidth * .5f + .12f;
       var bankMaterial = AssetDatabase.LoadAssetAtPath<Material>(Root + "/Art/GeneratedMeadow/MeadowGround.mat") ?? Mats["BankGround"];
       Primitive("SideBank_Left", PrimitiveType.Cube, parent,
-        new Vector3(-bankX, .085f, 0f), new Vector3(bankWidth, .17f, 8.5f), bankMaterial, false);
+        new Vector3(-bankX, .085f, 0f), new Vector3(bankWidth, .17f, 8.5f), bankMaterial, true).AddComponent<FishGroundSurface>();
       Primitive("SideBank_Right", PrimitiveType.Cube, parent,
-        new Vector3(bankX, .085f, 0f), new Vector3(bankWidth, .17f, 8.5f), bankMaterial, false);
+        new Vector3(bankX, .085f, 0f), new Vector3(bankWidth, .17f, 8.5f), bankMaterial, true).AddComponent<FishGroundSurface>();
     }
 
     private static void CreateOpenMeadow(Transform parent)
@@ -530,7 +531,7 @@ namespace GestureFistGame.Editor
         var collider = go.GetComponent<BoxCollider>(); collider.isTrigger = true; collider.size = new Vector3(.8f, 1.2f, .9f);
         var fish = go.GetComponent<FishTarget>();
         fish.game = game; fish.points = data[i].points; fish.displayName = data[i].display; fish.speed = data[i].speed;
-        AddStylizedFishVisual(go.transform, data[i].name, data[i].tint, i);
+        FishMobileUpgrade.AddFishModel(go.transform);
         result.Add(fish);
       }
       return result.ToArray();

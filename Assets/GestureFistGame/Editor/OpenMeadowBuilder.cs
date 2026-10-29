@@ -182,7 +182,9 @@ namespace GestureFistGame.Editor
       var path = RootPath + "/" + name + ".asset";
       DeleteAssetIfPresent(path);
       AssetDatabase.CreateAsset(mesh, path);
-      CreateMeshObject(name, root, mesh, material, false);
+      var ground = CreateMeshObject(name, root, mesh, material, false);
+      ground.AddComponent<MeshCollider>().sharedMesh = mesh;
+      ground.AddComponent<FishGroundSurface>();
     }
 
     private static void BuildGrassBands(Transform root, float side, Material material)

@@ -14,6 +14,8 @@ namespace GestureFistGame
     public AudioSource catchAudioSource;
     public AudioClip catchSound;
     [Range(0f, 1f)] public float catchVolume = .72f;
+    private readonly System.Collections.Generic.Dictionary<string, int> _speciesCounts = new System.Collections.Generic.Dictionary<string, int>();
+    public int CapturedCount(string species) => _speciesCounts.TryGetValue(species, out var count) ? count : 0;
     public int Score { get; private set; }
     public int Catches { get; private set; }
     public int Combo { get; private set; }
@@ -58,7 +60,7 @@ namespace GestureFistGame
 
     private void Update()
     {
-      if (Input.GetKeyDown(KeyCode.R)) ResetRound();
+      if ((IsRunning || IsFinished) && Input.GetKeyDown(KeyCode.R)) ResetRound();
       if (!IsRunning) return;
       // 手机首次授权和 MediaPipe 模型加载期间不消耗捕鱼回合时间。
       // 摄像头失败时也保留画面和诊断文字，方便用户点“重新连接摄像头”。
@@ -76,6 +78,7 @@ namespace GestureFistGame
 
     public void ResetRound()
     {
+      _speciesCounts.Clear();
       Score = 0;
       Catches = 0;
       Combo = 0;
@@ -107,6 +110,7 @@ namespace GestureFistGame
       fish.MarkCaught();
       Score += fish.points;
       Catches++;
+      _speciesCounts[fish.displayName] = CapturedCount(fish.displayName) + 1;
       Combo++;
       LastEvent = "捕获 " + fish.displayName + "  +" + fish.points;
       if (catchAudioSource != null && catchSound != null)

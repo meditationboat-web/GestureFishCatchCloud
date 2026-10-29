@@ -176,7 +176,8 @@ namespace GestureFistGame
     {
       var spawner = FindObjectOfType<FishSpawner>();
       if (spawner == null) return;
-      spawner.spawnX = 4.1f;
+      // Preserve the authored spawn position: 4.1 overlaps the right bank
+      // with the Scardinius model and immediately triggers ground removal.
       spawner.laneHalfWidth = 3.2f;
     }
 

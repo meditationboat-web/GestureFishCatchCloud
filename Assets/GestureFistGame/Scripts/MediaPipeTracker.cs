@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.IO;
 using Mediapipe;
@@ -32,7 +32,9 @@ namespace GestureFistGame
     [Tooltip("Skip the Intel virtual driver whose RGB24 subtype can block Unity WebCamTexture.Play on Windows.")]
     public bool skipUnsupportedIntelVirtualCamera = true;
     public string Status { get; private set; } = "摄像头准备中";
-    public bool ModelsReady => (usePose ? _pose != null : true) && _hands != null;
+    private bool NeedsPose => fishInput != null || usePose;
+    private bool NeedsHands => fishInput == null || input != null;
+    public bool ModelsReady => (NeedsPose == (_pose != null)) && (NeedsHands == (_hands != null));
     public bool CameraReady => _webcam != null && _webcam.isPlaying && _webcam.width > 32 && _webcam.height > 32 && _hasFirstFrame;
     public string Diagnostics => BuildDiagnostics();
     public float InferenceMs { get; private set; }
@@ -65,9 +67,9 @@ namespace GestureFistGame
       if (ModelsReady) return true;
       try
       {
-        var handBytes = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, handModel));
+        var handBytes = NeedsHands ? File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, handModel)) : null;
         byte[] poseBytes = null;
-        if (usePose)
+        if (NeedsPose)
           poseBytes = File.ReadAllBytes(Path.Combine(Application.streamingAssetsPath, poseModel));
         return CreateModels(handBytes, poseBytes);
       }
@@ -84,18 +86,19 @@ namespace GestureFistGame
     {
       try
       {
-        if (usePose)
+        DisposeTasks();
+        if (NeedsPose)
         {
           _pose = PoseLandmarker.CreateFromOptions(new PoseLandmarkerOptions(
             new BaseOptions(BaseOptions.Delegate.CPU, modelAssetBuffer: poseBytes),
-            RunningMode.VIDEO, 1, .5f, .5f, .5f, false));
+            RunningMode.VIDEO, fishInput != null ? 2 : 1, .5f, .5f, .5f, false));
         }
-        _hands = HandLandmarker.CreateFromOptions(new HandLandmarkerOptions(
+        if (NeedsHands) _hands = HandLandmarker.CreateFromOptions(new HandLandmarkerOptions(
           new BaseOptions(BaseOptions.Delegate.CPU, modelAssetBuffer: handBytes),
           RunningMode.VIDEO, 2, .5f, .5f, .5f));
-        _poseResult = usePose ? PoseLandmarkerResult.Alloc(1) : default(PoseLandmarkerResult);
+        _poseResult = NeedsPose ? PoseLandmarkerResult.Alloc(fishInput != null ? 2 : 1) : default(PoseLandmarkerResult);
         _handResult = HandLandmarkerResult.Alloc(2);
-        Debug.Log("GESTURE_MODELS_READY: Pose + Hand, CPU, in-memory models.");
+        Debug.Log("GESTURE_MODELS_READY: pose=" + (_pose != null) + " hands=" + (_hands != null) + " maxPoses=" + (fishInput != null ? 2 : 1));
         return true;
       }
       catch (Exception e)
@@ -114,6 +117,8 @@ namespace GestureFistGame
       byte[] poseBytes = null;
       Status = "正在从 APK 读取手势模型";
 
+      if (NeedsHands)
+      {
       var handUrl = Application.streamingAssetsPath.TrimEnd('/', '\\') + "/" + handModel;
       using (var request = UnityWebRequest.Get(handUrl))
       {
@@ -127,7 +132,8 @@ namespace GestureFistGame
         handBytes = request.downloadHandler.data;
       }
 
-      if (usePose)
+      }
+      if (NeedsPose)
       {
         var poseUrl = Application.streamingAssetsPath.TrimEnd('/', '\\') + "/" + poseModel;
         using (var request = UnityWebRequest.Get(poseUrl))
@@ -257,7 +263,7 @@ namespace GestureFistGame
       }
 
       if (preview != null) { preview.texture = _webcam; preview.color=Color.white; }
-      Status = devices[_cameraIndex].name + " · 画面已连接，请让一只手入镜";
+      Status = devices[_cameraIndex].name + " · 画面已连接，请让头部、肩膀和手腕入镜";
       _starting = false;
     }
 
@@ -299,16 +305,15 @@ namespace GestureFistGame
           var options=new ImageProcessingOptions(rotationDegrees:_webcam.videoRotationAngle);
           if (_pose != null)
           {
-            _pose.TryDetectForVideo(image,_timestamp,options,ref _poseResult);
+            if (!_pose.TryDetectForVideo(image,_timestamp,options,ref _poseResult)) _poseResult.poseLandmarks?.Clear();
             input?.ReceivePose(_poseResult);
             fishInput?.ReceivePose(_poseResult);
           }
-          if ((_counter++ & 1)==0)
+          if (_hands != null && (_counter++ & 1)==0)
           {
             using(var handImage=new MPImage(ImageFormat.Types.Format.Srgba,_frame))
               _hands.TryDetectForVideo(handImage,_timestamp,options,ref _handResult);
             input?.ReceiveHands(_handResult);
-            fishInput?.ReceiveHands(_handResult);
           }
         }
         InferenceMs=(float)timer.Elapsed.TotalMilliseconds;

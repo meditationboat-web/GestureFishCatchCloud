@@ -1,16 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Mediapipe.Tasks.Components.Containers;
-using Mediapipe.Tasks.Vision.HandLandmarker;
+using Mediapipe.Tasks.Vision.PoseLandmarker;
 using UnityEngine;
 
 namespace GestureFistGame
 {
-  /// <summary>
-  /// Converts two detected hand waves into one cooperative net throw. Hands are
-  /// assigned by their screen-space x position, so the rule is stable even when
-  /// MediaPipe returns the hands in a different order on each frame.
-  /// </summary>
+  // Pose wrists above an estimated head-top line drive the two sides of the fishing net.
   public sealed class FishGestureInput : MonoBehaviour
   {
     public enum HandSide { Left, Right }
@@ -20,13 +16,15 @@ namespace GestureFistGame
     public FishMouseInput mouseInput;
     public bool mouseMode = true;
     public bool startCameraOnMobile = true;
-    [Tooltip("启用后必须左右两只手都在时间窗内上挥，才会抛网")]
+    [Tooltip("启用后左右两侧都要在时间窗内举手过头顶，才会抛网")]
     public bool requireTwoHands = true;
-    [Range(.08f, .6f)] public float upwardVelocityThreshold = .72f;
-    [Range(.01f, .3f)] public float minimumDisplacement = .055f;
-    [Range(.05f, .8f)] public float gestureCooldown = .22f;
-    [Range(.02f, .3f)] public float rearmDistance = .075f;
-    [Range(.25f, 1.5f)] public float cooperationWindow = .70f;
+    [Range(.1f, .9f)] public float minimumVisibility = .5f;
+    [Tooltip("头顶参考线：比可见眼睛/耳朵最高点再高出此比例的肩宽")]
+    public float headTopMarginRatio = .35f;
+    [Tooltip("手腕低于肩膀的距离，占肩宽的比例；放下后才可再次触发")]
+    public float loweredShoulderRatio = .15f;
+    public float poseHoldSeconds = .1f;
+    [Range(.25f, 1.5f)] public float cooperationWindow = 1.2f;
     [Range(.15f, 1f)] public float handLostTimeout = .55f;
     public string Status { get; private set; } = "鼠标调试 · 左右两手合作抛网";
     public bool HandDetected { get; private set; }
@@ -43,28 +41,37 @@ namespace GestureFistGame
       public bool seen;
       public float lastY;
       public float lastSampleTime = -1f;
-      public float lastTriggerY;
+      public float raisedSince = -1f;
+      public float loweredSince = -1f;
       public float waveTime = -10f;
       public bool armed = true;
     }
 
     private readonly HandState _left = new HandState();
     private readonly HandState _right = new HandState();
-    private float _cooldownUntil;
+    private int _peopleCount;
+    private float _lastPoseTime = -1f;
+    private float _leftOwnerX, _rightOwnerX;
 
     private void Start()
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
-      if (startCameraOnMobile) UseCamera();
+      if (startCameraOnMobile && game != null && game.IsRunning) UseCamera();
 #endif
     }
 
     private void Update()
     {
+      if (game != null && !game.IsRunning && !game.IsFinished) return;
       if (Input.GetKeyDown(KeyCode.F1)) UseCamera();
       if (Input.GetKeyDown(KeyCode.F3)) UseMouse();
       if (Input.GetKeyDown(KeyCode.R)) game?.ResetRound();
       ExpirePendingWaves(Time.unscaledTime);
+      if (!mouseMode && Time.unscaledTime - _lastPoseTime > handLostTimeout)
+      {
+        MarkMissing(_left, Time.unscaledTime); MarkMissing(_right, Time.unscaledTime);
+        HandDetected = BothHandsDetected = false; DetectedHands = 0;
+      }
       if (mouseMode)
       {
         mouseInput?.Tick(false);
@@ -79,11 +86,11 @@ namespace GestureFistGame
       }
       if (!HandDetected || Time.unscaledTime - Mathf.Max(_left.lastSampleTime, _right.lastSampleTime) > .5f)
         Status = tracker != null && !tracker.CameraReady ? tracker.Status :
-          (requireTwoHands ? "请让左右两只手入镜，并在时间窗内一起向上挥" : "请将一只手放入镜头并向上挥");
+          (requireTwoHands ? "请让头部、肩膀和手腕入镜，举手过头顶" : "请让头部、肩膀和手腕入镜，举手过头顶");
       else if (requireTwoHands && !BothHandsDetected)
-        Status = "已识别 " + DetectedHands + "/2 只手 · 请让另一只手入镜";
+        Status = "已识别 " + DetectedHands + "/2 只手腕 · 请让头部、肩膀和手腕入镜";
       else if (requireTwoHands && (_left.waveTime >= 0f || _right.waveTime >= 0f))
-        Status = "一只手已上挥 · 等另一只手合作";
+        Status = "一侧已举手 · 等另一侧合作";
       else
         Status = "左右手已识别 · " + (game != null && game.net != null ? game.net.PhaseName : "等待");
     }
@@ -105,75 +112,126 @@ namespace GestureFistGame
         tracker.fishInput = this;
         tracker.input = null;
         tracker.autoStart = false;
-        tracker.usePose = false;
+        tracker.usePose = true;
         tracker.RetryCamera();
       }
-      Status = "正在启动摄像头 · 请让左右两只手同时入镜";
+      Status = "正在启动摄像头 · 请让头部和上半身入镜";
     }
 
-    public void ReceivePose(Mediapipe.Tasks.Vision.PoseLandmarker.PoseLandmarkerResult result) { }
-
-    public void ReceiveHands(HandLandmarkerResult result)
+    public void ReceivePose(PoseLandmarkerResult result)
     {
       if (mouseMode) return;
-      var samples = new List<Vector2>();
-      if (result.handLandmarks != null)
-      {
-        for (int i = 0; i < result.handLandmarks.Count; i++)
+      float now = Time.unscaledTime;
+      ExpirePendingWaves(now);
+      var people = new List<List<NormalizedLandmark>>();
+      if (result.poseLandmarks != null)
+        foreach (var pose in result.poseLandmarks)
         {
-          var landmarks = result.handLandmarks[i].landmarks;
-          if (landmarks != null && landmarks.Count >= 21) samples.Add(PalmCenter(landmarks));
+          var p = pose.landmarks;
+          if (p != null && p.Count >= 17 && Visible(p[11]) && Visible(p[12]) &&
+              Vector2.Distance(Point(p[11]), Point(p[12])) >= .04f) people.Add(p);
+        }
+      people.Sort((a, b) => CenterX(a).CompareTo(CenterX(b)));
+      if (people.Count > 2) people.RemoveRange(2, people.Count - 2);
+      DetectedHands = 0;
+      // A changed player arrangement cancels pending gestures; lower arms to rearm.
+      if (people.Count > 0)
+      {
+        float lx = CenterX(people[0]), rx = CenterX(people[people.Count - 1]);
+        if (_peopleCount > 0 && (people.Count != _peopleCount ||
+            Mathf.Abs(lx - _leftOwnerX) > .25f || Mathf.Abs(rx - _rightOwnerX) > .25f))
+        {
+          ResetState(_left); ResetState(_right);
+          _left.armed = _right.armed = false;
+        }
+        _peopleCount = people.Count; _leftOwnerX = lx; _rightOwnerX = rx; _lastPoseTime = now;
+        if (people.Count == 1)
+        {
+          var p = people[0];
+          // Shoulder order is stable even when the wrists cross.
+          int l = p[11].x < p[12].x ? 11 : 12;
+          SampleArm(_left, HandSide.Left, p, l, now);
+          SampleArm(_right, HandSide.Right, p, l == 11 ? 12 : 11, now);
+        }
+        else
+        {
+          SamplePerson(_left, HandSide.Left, people[0], now);
+          SamplePerson(_right, HandSide.Right, people[1], now);
         }
       }
-      samples.Sort((a, b) => a.x.CompareTo(b.x));
-      float now = Time.unscaledTime;
-      DetectedHands = Mathf.Min(2, samples.Count);
+      else { MarkMissing(_left, now); MarkMissing(_right, now); }
       HandDetected = DetectedHands > 0;
       BothHandsDetected = DetectedHands >= 2;
-      if (samples.Count > 0) ProcessHand(_left, HandSide.Left, samples[0], now);
-      else MarkMissing(_left, now);
-      if (samples.Count > 1) ProcessHand(_right, HandSide.Right, samples[samples.Count - 1], now);
-      else MarkMissing(_right, now);
-      LastHandY = samples.Count == 0 ? LastHandY : samples[0].y;
     }
 
-    private void ProcessHand(HandState state, HandSide side, Vector2 palm, float now)
+    private bool Visible(NormalizedLandmark p) =>
+      !float.IsNaN(p.x) && !float.IsNaN(p.y) && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1 &&
+      (p.visibility ?? 1f) >= minimumVisibility && (p.presence ?? 1f) >= minimumVisibility;
+    private static Vector2 Point(NormalizedLandmark p) => new Vector2(p.x, p.y);
+    private static float CenterX(List<NormalizedLandmark> p) => (p[11].x + p[12].x) * .5f;
+    private static float ArmHeight(List<NormalizedLandmark> p, int shoulder) =>
+      (p[shoulder].y - p[shoulder + 4].y) / Mathf.Max(.06f, Vector2.Distance(Point(p[11]), Point(p[12])));
+
+    private bool TryHeadTop(List<NormalizedLandmark> p, out float headTop)
     {
-      state.seen = true;
-      if (state.lastSampleTime > 0f)
+      // Pose has no crown landmark. Estimate it above the highest visible eye/ear.
+      headTop = 1f;
+      int count = 0;
+      foreach (int index in new[] { 2, 5, 7, 8 })
+        if (Visible(p[index])) { headTop = Mathf.Min(headTop, p[index].y); count++; }
+      if (count < 2) return false;
+      headTop -= headTopMarginRatio * Vector2.Distance(Point(p[11]), Point(p[12]));
+      return headTop >= 0f;
+    }
+
+    private void SamplePerson(HandState state, HandSide side, List<NormalizedLandmark> p, float now)
+    {
+      bool a = Visible(p[15]), b = Visible(p[16]);
+      if (!a && !b) { MarkMissing(state, now); return; }
+      int shoulder = a && (!b || ArmHeight(p, 11) >= ArmHeight(p, 12)) ? 11 : 12;
+      SampleArm(state, side, p, shoulder, now);
+    }
+
+    private void SampleArm(HandState state, HandSide side, List<NormalizedLandmark> p, int shoulder, float now)
+    {
+      if (!Visible(p[shoulder + 4]) || !TryHeadTop(p, out float headTop))
+      { MarkMissing(state, now); return; }
+      DetectedHands++;
+      float y = p[shoulder + 4].y;
+      LastHandY = y;
+      LastUpwardVelocity = state.lastSampleTime >= 0 ? Mathf.Max(0, (state.lastY - y) / Mathf.Max(.001f, now - state.lastSampleTime)) : 0;
+      if (state.lastSampleTime >= 0 && now - state.lastSampleTime > handLostTimeout)
+      { state.waveTime = -10; state.raisedSince = state.loweredSince = -1; }
+      state.seen = true; state.lastSampleTime = now; state.lastY = y;
+      float height = ArmHeight(p, shoulder);
+      if (height <= -loweredShoulderRatio)
       {
-        float dt = Mathf.Max(.001f, now - state.lastSampleTime);
-        float displacement = state.lastY - palm.y;
-        float velocity = displacement / dt;
-        LastUpwardVelocity = Mathf.Max(0f, velocity);
-        bool rising = displacement >= minimumDisplacement && velocity >= upwardVelocityThreshold;
-        // Allow the other hand to arrive during the short cooldown; only a
-        // repeated wave from the same armed state is blocked.
-        if (rising && state.armed && (now >= _cooldownUntil || state.waveTime < 0f))
-        {
-          state.armed = false;
-          state.lastTriggerY = palm.y;
-          state.waveTime = now;
-          _cooldownUntil = now + gestureCooldown;
-          HandWaveDetected?.Invoke(side);
-          if (!requireTwoHands) CompleteWave("手势上挥", velocity);
-          else TryCompleteCooperativeWave(velocity);
-        }
-        if (!state.armed && palm.y > state.lastTriggerY + rearmDistance && now >= _cooldownUntil)
-          state.armed = true;
+        state.raisedSince = -1;
+        if (state.loweredSince < 0) state.loweredSince = now;
+        if (now - state.loweredSince >= poseHoldSeconds) state.armed = true;
       }
-      state.lastY = palm.y;
-      state.lastSampleTime = now;
+      else
+      {
+        state.loweredSince = -1;
+        if (y > headTop) { state.raisedSince = -1; return; }
+        if (state.raisedSince < 0) state.raisedSince = now;
+        if (state.armed && now - state.raisedSince >= poseHoldSeconds)
+        {
+          state.armed = false; state.waveTime = now;
+          HandWaveDetected?.Invoke(side);
+          if (!requireTwoHands) CompleteWave("姿态举手", 1f);
+          else TryCompleteCooperativeWave(1f);
+        }
+      }
     }
 
     private void MarkMissing(HandState state, float now)
     {
-      if (state.seen && state.lastSampleTime > 0f && now - state.lastSampleTime > handLostTimeout)
+      state.raisedSince = state.loweredSince = -1;
+      if (state.lastSampleTime >= 0 && now - state.lastSampleTime > handLostTimeout)
       {
-        state.seen = false;
-        state.armed = true;
-        state.waveTime = -10f;
-        state.lastSampleTime = -1f;
+        state.seen = false; state.waveTime = -10f;
+        // Tracking loss must never rearm a hand that is still raised.
       }
     }
 
@@ -188,7 +246,7 @@ namespace GestureFistGame
       }
       _left.waveTime = -10f;
       _right.waveTime = -10f;
-      CompleteWave("左右双手合作上挥", velocity);
+      CompleteWave("左右合作举手", velocity);
     }
 
     private void CompleteWave(string source, float velocity)
@@ -206,7 +264,6 @@ namespace GestureFistGame
     {
       var state = side == HandSide.Left ? _left : _right;
       float now = Time.unscaledTime;
-      if (now < _cooldownUntil && state.waveTime >= 0f) return;
       state.waveTime = now;
       state.armed = false;
       HandWaveDetected?.Invoke(side);
@@ -231,7 +288,7 @@ namespace GestureFistGame
       HandDetected = false;
       BothHandsDetected = false;
       DetectedHands = 0;
-      _cooldownUntil = 0f;
+      _peopleCount = 0; _lastPoseTime = -1f;
     }
 
     private static void ResetState(HandState state)
@@ -239,16 +296,10 @@ namespace GestureFistGame
       state.seen = false;
       state.lastY = 0f;
       state.lastSampleTime = -1f;
-      state.lastTriggerY = 0f;
+      state.raisedSince = state.loweredSince = -1f;
       state.waveTime = -10f;
       state.armed = true;
     }
 
-    private static Vector2 PalmCenter(List<NormalizedLandmark> p)
-    {
-      var sum = Vector2.zero;
-      foreach (var index in new[] { 0, 5, 9, 13, 17 }) sum += new Vector2(p[index].x, p[index].y);
-      return sum / 5f;
-    }
   }
 }
