@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace GestureFistGame
 {
@@ -20,6 +20,7 @@ namespace GestureFistGame
     private void Awake()
     {
       ApplyArena();
+      FishRiverLayout.Apply();
       ApplyNet();
       ApplyCamera();
       ApplyWorldGuide();
@@ -31,7 +32,7 @@ namespace GestureFistGame
     private static void ApplyArena()
     {
       var water = FindNamed("WaterChannel_RightToLeft", "WaterChannel");
-      SetTransform(water, new Vector3(0, 0, 0), new Vector3(8.4f, .25f, 8));
+      SetTransform(water, new Vector3(0, 0, 0), new Vector3(64f, .25f, 8));
       ApplyWaterSurface(water);
       var arena = FindNamed("Arena - 水道与草岸");
       StylizedIslandRuntimeBuilder.Ensure(arena);
@@ -134,9 +135,9 @@ namespace GestureFistGame
       if (water == null) return;
       var surface = water.GetComponent<InteractiveWaterSurface>();
       if (surface == null) surface = water.gameObject.AddComponent<InteractiveWaterSurface>();
-      surface.width = 8.4f;
+      surface.width = 64f;
       surface.depth = 8f;
-      surface.columns = 56;
+      surface.columns = 128;
       surface.rows = 40;
       surface.circular = false;
       surface.enableRenderTextureRipples = true;

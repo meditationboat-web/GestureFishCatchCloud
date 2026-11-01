@@ -312,10 +312,10 @@ namespace GestureFistGame.Editor
     private static void CreateArena(Transform parent)
     {
       // 横向水道：Doro 从右岸进入，经过中央水平网后向左岸游出。
-      var water = Primitive("WaterChannel_RightToLeft", PrimitiveType.Cube, parent, new Vector3(0, 0, 0), new Vector3(8.4f, .25f, 8), Mats["Water"]);
+      var water = Primitive("WaterChannel_RightToLeft", PrimitiveType.Cube, parent, new Vector3(0, 0, 0), new Vector3(64f, .25f, 8), Mats["Water"]);
       var waterSurface = water.AddComponent<InteractiveWaterSurface>();
-      waterSurface.width = 8.4f; waterSurface.depth = 8f;
-      waterSurface.columns = 56; waterSurface.rows = 40;
+      waterSurface.width = 64f; waterSurface.depth = 8f;
+      waterSurface.columns = 128; waterSurface.rows = 40;
       waterSurface.circular = false;
       waterSurface.enableRenderTextureRipples = true;
       waterSurface.rippleMapResolution = 128;
@@ -333,6 +333,7 @@ namespace GestureFistGame.Editor
       // Keep the water object and its parameters intact. Rebuild only the
       // surrounding island dressing with the calmer low-poly art direction.
       StylizedIslandBuilder.Build(parent);
+      FishRiverLayout.Apply();
     }
 
     private static void CreateSideBanks(Transform parent)
@@ -342,7 +343,7 @@ namespace GestureFistGame.Editor
       // sky-blue voids visible beside the central water and giving both sides
       // the continuous meadow treatment of the reference image.
       float bankWidth = 15.0f;
-      float bankX = 4.2f + bankWidth * .5f + .12f;
+      float bankX = 32f + bankWidth * .5f + .12f;
       var bankMaterial = AssetDatabase.LoadAssetAtPath<Material>(Root + "/Art/GeneratedMeadow/MeadowGround.mat") ?? Mats["BankGround"];
       Primitive("SideBank_Left", PrimitiveType.Cube, parent,
         new Vector3(-bankX, .085f, 0f), new Vector3(bankWidth, .17f, 8.5f), bankMaterial, true).AddComponent<FishGroundSurface>();
