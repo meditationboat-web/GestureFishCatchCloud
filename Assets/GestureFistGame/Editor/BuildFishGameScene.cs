@@ -877,12 +877,13 @@ namespace GestureFistGame.Editor
     {
       PlayerSettings.productName = "挥手抛网捕鱼学习项目";
       PlayerSettings.companyName = "GestureFist";
-      PlayerSettings.allowedAutorotateToPortrait = true;
-      PlayerSettings.allowedAutorotateToPortraitUpsideDown = true;
-      PlayerSettings.allowedAutorotateToLandscapeLeft = false;
-      PlayerSettings.allowedAutorotateToLandscapeRight = false;
-      PlayerSettings.defaultScreenWidth = 1080;
-      PlayerSettings.defaultScreenHeight = 1920;
+      PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
+      PlayerSettings.allowedAutorotateToPortrait = false;
+      PlayerSettings.allowedAutorotateToPortraitUpsideDown = false;
+      PlayerSettings.allowedAutorotateToLandscapeLeft = true;
+      PlayerSettings.allowedAutorotateToLandscapeRight = true;
+      PlayerSettings.defaultScreenWidth = 1920;
+      PlayerSettings.defaultScreenHeight = 1080;
       PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.gesturefist.fishcatch");
       PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel26;
       PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;

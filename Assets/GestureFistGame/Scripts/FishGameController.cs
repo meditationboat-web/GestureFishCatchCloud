@@ -50,11 +50,11 @@ namespace GestureFistGame
     private void Start()
     {
 #if UNITY_ANDROID || UNITY_IOS
-      Screen.orientation = ScreenOrientation.Portrait;
-      Screen.autorotateToPortrait = true;
-      Screen.autorotateToPortraitUpsideDown = true;
-      Screen.autorotateToLandscapeLeft = false;
-      Screen.autorotateToLandscapeRight = false;
+      Screen.autorotateToPortrait = false;
+      Screen.autorotateToPortraitUpsideDown = false;
+      Screen.autorotateToLandscapeLeft = true;
+      Screen.autorotateToLandscapeRight = true;
+      Screen.orientation = ScreenOrientation.AutoRotation;
 #endif
       if (autoStart) ResetRound();
     }

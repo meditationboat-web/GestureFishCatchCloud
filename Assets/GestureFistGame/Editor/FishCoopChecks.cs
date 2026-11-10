@@ -20,6 +20,7 @@ namespace GestureFistGame.Editor
     }
     public static void Run()
     {
+      Check(!PlayerSettings.allowedAutorotateToPortrait && !PlayerSettings.allowedAutorotateToPortraitUpsideDown && PlayerSettings.allowedAutorotateToLandscapeLeft && PlayerSettings.allowedAutorotateToLandscapeRight,"mobile landscape-only settings");
       var root=new GameObject("Coop verification");
       try {
         var game=root.AddComponent<FishGameController>(); game.autoStart=false;

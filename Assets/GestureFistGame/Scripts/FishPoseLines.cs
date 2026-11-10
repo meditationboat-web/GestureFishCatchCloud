@@ -11,11 +11,18 @@ namespace GestureFistGame {
     readonly List<Vector2[]> bodies = new List<Vector2[]>();
     readonly List<bool[]> visible = new List<bool[]>();
     float received;
+    float lastRotation=float.NaN;
+    Rect lastUv;
     static readonly int[] edges={0,2,2,7,0,5,5,8,11,12,11,13,13,15,12,14,14,16,11,23,12,24,23,24,23,25,25,27,24,26,26,28,27,29,29,31,28,30,30,32};
     protected override void OnEnable(){base.OnEnable();if(input!=null)input.PoseUpdated+=Receive;}
     protected override void OnDisable(){if(input!=null)input.PoseUpdated-=Receive;bodies.Clear();visible.Clear();base.OnDisable();}
     void Receive(PoseLandmarkerResult result){
-      bodies.Clear();visible.Clear();received=Time.unscaledTime;
+      float rotation=preview!=null?preview.rectTransform.localEulerAngles.z:0;
+      Rect uv=preview!=null?preview.uvRect:new Rect(0,0,1,1);
+      if(rotation!=lastRotation || uv!=lastUv){bodies.Clear();visible.Clear();lastRotation=rotation;lastUv=uv;}
+      var previous=new List<Vector2[]>(bodies);var previousValid=new List<bool[]>(visible);
+      float elapsed=Time.unscaledTime-received;received=Time.unscaledTime;
+      bodies.Clear();visible.Clear();
       if(result.poseLandmarks!=null)foreach(var pose in result.poseLandmarks){
         if(pose.landmarks==null||pose.landmarks.Count<33)continue;
         var points=new Vector2[33];var valid=new bool[33];
@@ -28,6 +35,13 @@ namespace GestureFistGame {
           var points=bodies[a];bodies[a]=bodies[b];bodies[b]=points;
           var valid=visible[a];visible[a]=visible[b];visible[b]=valid;
         }
+      // Smooth display only; never feed filtered points back into gesture timing.
+      if(previous.Count==bodies.Count && elapsed<.2f)for(int b=0;b<bodies.Count;b++) {
+        if(Vector2.Distance(previous[b][11],bodies[b][11])>.18f)continue;
+        float blend=1-Mathf.Exp(-18f*Mathf.Max(.001f,elapsed));
+        for(int i=0;i<33;i++)if(visible[b][i]&&previousValid[b][i])
+          bodies[b][i]=Vector2.Lerp(previous[b][i],bodies[b][i],blend);
+      }
       SetVerticesDirty();
     }
     void Update(){SetVerticesDirty();}
@@ -47,7 +61,7 @@ namespace GestureFistGame {
       for(int b=0;b<bodies.Count;b++){
         // With only one visible body, avoid assigning an incorrect P1/P2 identity.
         Color c=bodies.Count==1?Color.white:b==0?new Color(.91f,.28f,.29f):new Color(.23f,.5f,.8f);
-        for(int e=0;e<edges.Length;e+=2){int a=edges[e],z=edges[e+1];if(!visible[b][a]||!visible[b][z])continue;
+        for(int e=0;e<edges.Length;e+=2){int a=edges[e],z=edges[e+1];if(!visible[b][a]||!visible[b][z]||Vector2.Distance(bodies[b][a],bodies[b][z])>.5f)continue;
           Vector2 start=Point(bodies[b][a]),end=Point(bodies[b][z]);Vector2 n=new Vector2(-(end-start).y,(end-start).x).normalized*2.5f;
           Quad(vh,start-n,start+n,end+n,end-n,c);
         }
