@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
@@ -67,10 +67,16 @@ namespace GestureFistGame
       SetButtonLabel(resetButton, "再玩一回");
       SetButtonLabel(calibrateButton, "重连相机");
       SetButtonLabel(gestureButton, "手势游玩");
-      SetButtonLabel(mouseButton, "鼠标游玩");
+      SetButtonLabel(mouseButton, "鼠标调试");
+#if !UNITY_EDITOR
+      if (mouseButton != null) mouseButton.gameObject.SetActive(false);
+#endif
       ApplyResponsiveLayout(true);
       gameObject.AddComponent<FishStartScreen>();
       gameObject.AddComponent<FishCameraSplitLayout>();
+      gameObject.AddComponent<FishCoopOverlay>();
+      gameObject.AddComponent<FishCompactHud>();
+      gameObject.AddComponent<FishPageCards>();
     }
 
     private void Update()
@@ -83,15 +89,14 @@ namespace GestureFistGame
       if (rankText != null) rankText.text = "连击 ×" + game.Combo;
       if (statusText != null)
       {
-        statusText.text = game.IsFinished ? "回合结束" : input.mouseMode ? "左右上拖抛网" :
-          !input.CameraReady ? "连接摄像头…" : input.DetectedHands < 2 ? "请露出头部和手腕" : "举手过头顶抛网";
+        statusText.text = game.IsFinished ? "回合结束" : game.FlowHint;
       }
       if (netText != null) netText.gameObject.SetActive(false);
       if (tracker != null && !input.mouseMode)
       {
 
         if (cameraDebugText != null)
-          cameraDebugText.text = input.CameraReady ? "已识别 " + input.DetectedHands + "/2 只手" : "相机连接中，可点击重连";
+          cameraDebugText.text = input.CameraReady ? "已识别 " + input.DetectedPlayers + "/2 位玩家 · 双手均需入镜" : "相机连接中，可点击重连";
       }
       else if (cameraDebugText != null)
       {
@@ -101,9 +106,13 @@ namespace GestureFistGame
       {
         finishPanel.SetActive(game.IsFinished);
         if (game.IsFinished && finishText != null)
-          finishText.text = "回合结束\n\n" + game.Score + " 分 · " + game.Catches + " 条";
+          finishText.text = "团队收获 " + game.Score + " 分 · " + game.Catches + " 条\n" +
+            (game.PassedFish == 0 ? "暂无星级" : "星级 " + new string('★', game.Stars) + new string('☆', 3 - game.Stars)) +
+            " · 同步率 " + game.SyncRate.ToString("P0") + "\n最长连击 × " + game.LongestCombo +
+            " · 奖励 +" + game.LongestCombo * 5 + "\n" + game.PlayerReport(0) + "\n" + game.PlayerReport(1) + "\n历史最佳 " + game.BestScore;
       }
       if (cameraPanel != null) cameraPanel.SetActive(game.IsRunning || game.IsFinished);
+      SetButtonLabel(resetButton, game.Phase == FishGameController.RoundPhase.Paused ? "确认继续" : "再玩一回");
       if (gestureButton != null) gestureButton.interactable = input.mouseMode;
       if (mouseButton != null) mouseButton.interactable = !input.mouseMode;
       if (calibrateButton != null) calibrateButton.interactable = !input.mouseMode;
@@ -111,7 +120,7 @@ namespace GestureFistGame
 
     public void UseGesture() { input?.UseCamera(); ClearUiSelection(); }
     public void UseMouse() { input?.UseMouse(); ClearUiSelection(); }
-    public void ResetRound() { game?.ResetRound(); ClearUiSelection(); }
+    public void ResetRound() { if (game != null && game.Phase == FishGameController.RoundPhase.Paused) game.ConfirmResume(); else game?.ResetRound(); ClearUiSelection(); }
     public void Calibrate() { input?.UseCamera(); ClearUiSelection(); }
 
     private static void DisableKeyboardSubmit(Button button)

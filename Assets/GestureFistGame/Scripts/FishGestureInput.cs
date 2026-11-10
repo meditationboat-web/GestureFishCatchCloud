@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Mediapipe.Tasks.Components.Containers;
 using Mediapipe.Tasks.Vision.PoseLandmarker;
@@ -24,11 +24,16 @@ namespace GestureFistGame
     [Tooltip("手腕低于肩膀的距离，占肩宽的比例；放下后才可再次触发")]
     public float loweredShoulderRatio = .15f;
     public float poseHoldSeconds = .1f;
-    [Range(.25f, 1.5f)] public float cooperationWindow = 1.2f;
+    [Range(.25f, 1.5f)] public float cooperationWindow = 1.5f;
     [Range(.15f, 1f)] public float handLostTimeout = .55f;
     public string Status { get; private set; } = "鼠标调试 · 左右两手合作抛网";
     public bool HandDetected { get; private set; }
     public bool CameraReady => tracker != null && tracker.CameraReady;
+    public int DetectedPlayers { get; private set; }
+    private float _lastBothPoseTime = -100f;
+    public float TrackingLostSeconds => Mathf.Max(0, Time.unscaledTime - _lastBothPoseTime);
+    public bool TwoPlayersReady => DetectedPlayers == 2 && BothHandsDetected && Time.unscaledTime - _lastPoseTime <= .15f;
+    public void ResetForPlay() { ResetState(_left); ResetState(_right); _left.armed = _right.armed = false; }
     public bool BothHandsDetected { get; private set; }
     public int DetectedHands { get; private set; }
     public float LastHandY { get; private set; }
@@ -53,6 +58,13 @@ namespace GestureFistGame
     private float _lastPoseTime = -1f;
     private float _leftOwnerX, _rightOwnerX;
 
+    private void Awake()
+    {
+#if !UNITY_EDITOR
+      mouseMode = false;
+#endif
+    }
+
     private void Start()
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -64,8 +76,10 @@ namespace GestureFistGame
     {
       if (game != null && !game.IsRunning && !game.IsFinished) return;
       if (Input.GetKeyDown(KeyCode.F1)) UseCamera();
+#if UNITY_EDITOR
       if (Input.GetKeyDown(KeyCode.F3)) UseMouse();
-      if (Input.GetKeyDown(KeyCode.R)) game?.ResetRound();
+#endif
+
       ExpirePendingWaves(Time.unscaledTime);
       if (!mouseMode && Time.unscaledTime - _lastPoseTime > handLostTimeout)
       {
@@ -78,25 +92,22 @@ namespace GestureFistGame
         Status = "鼠标调试 · 左右区域上拖，或 Q + P 合作抛网";
         return;
       }
-      if (Input.GetKeyDown(KeyCode.Space))
-      {
-        // 手机没有键盘；此快捷键只保留作编辑器测试，同时模拟两位玩家。
-        RegisterMouseWave(HandSide.Left);
-        RegisterMouseWave(HandSide.Right);
-      }
       if (!HandDetected || Time.unscaledTime - Mathf.Max(_left.lastSampleTime, _right.lastSampleTime) > .5f)
         Status = tracker != null && !tracker.CameraReady ? tracker.Status :
           (requireTwoHands ? "请让头部、肩膀和手腕入镜，举手过头顶" : "请让头部、肩膀和手腕入镜，举手过头顶");
       else if (requireTwoHands && !BothHandsDetected)
-        Status = "已识别 " + DetectedHands + "/2 只手腕 · 请让头部、肩膀和手腕入镜";
+        Status = "已识别 " + DetectedHands + "/2 位玩家 · 请让头部、肩膀和手腕入镜";
       else if (requireTwoHands && (_left.waveTime >= 0f || _right.waveTime >= 0f))
         Status = "一侧已举手 · 等另一侧合作";
       else
-        Status = "左右手已识别 · " + (game != null && game.net != null ? game.net.PhaseName : "等待");
+        Status = "两位玩家已识别 · " + (game != null && game.net != null ? game.net.PhaseName : "等待");
     }
 
     public void UseMouse()
     {
+#if !UNITY_EDITOR
+      return;
+#endif
       mouseMode = true;
       ResetHands();
       tracker?.SuspendCamera();
@@ -118,9 +129,11 @@ namespace GestureFistGame
       Status = "正在启动摄像头 · 请让头部和上半身入镜";
     }
 
+    public event Action<PoseLandmarkerResult> PoseUpdated;
     public void ReceivePose(PoseLandmarkerResult result)
     {
       if (mouseMode) return;
+      PoseUpdated?.Invoke(result);
       float now = Time.unscaledTime;
       ExpirePendingWaves(now);
       var people = new List<List<NormalizedLandmark>>();
@@ -133,7 +146,7 @@ namespace GestureFistGame
         }
       people.Sort((a, b) => CenterX(a).CompareTo(CenterX(b)));
       if (people.Count > 2) people.RemoveRange(2, people.Count - 2);
-      DetectedHands = 0;
+      DetectedHands = 0; DetectedPlayers = people.Count;
       // A changed player arrangement cancels pending gestures; lower arms to rearm.
       if (people.Count > 0)
       {
@@ -143,25 +156,21 @@ namespace GestureFistGame
         {
           ResetState(_left); ResetState(_right);
           _left.armed = _right.armed = false;
+          // Brief tracking dropout uses the controller's 0.5 second grace period.
+          if (people.Count == 2 && _peopleCount == 2 && game != null && game.SimulationActive) game.PauseRound();
         }
         _peopleCount = people.Count; _leftOwnerX = lx; _rightOwnerX = rx; _lastPoseTime = now;
-        if (people.Count == 1)
-        {
-          var p = people[0];
-          // Shoulder order is stable even when the wrists cross.
-          int l = p[11].x < p[12].x ? 11 : 12;
-          SampleArm(_left, HandSide.Left, p, l, now);
-          SampleArm(_right, HandSide.Right, p, l == 11 ? 12 : 11, now);
-        }
-        else
+        if (people.Count == 2)
         {
           SamplePerson(_left, HandSide.Left, people[0], now);
           SamplePerson(_right, HandSide.Right, people[1], now);
         }
+        else { MarkMissing(_left, now); MarkMissing(_right, now); }
       }
       else { MarkMissing(_left, now); MarkMissing(_right, now); }
       HandDetected = DetectedHands > 0;
       BothHandsDetected = DetectedHands >= 2;
+      if (BothHandsDetected) _lastBothPoseTime = now;
     }
 
     private bool Visible(NormalizedLandmark p) =>
@@ -186,24 +195,16 @@ namespace GestureFistGame
 
     private void SamplePerson(HandState state, HandSide side, List<NormalizedLandmark> p, float now)
     {
-      bool a = Visible(p[15]), b = Visible(p[16]);
-      if (!a && !b) { MarkMissing(state, now); return; }
-      int shoulder = a && (!b || ArmHeight(p, 11) >= ArmHeight(p, 12)) ? 11 : 12;
-      SampleArm(state, side, p, shoulder, now);
-    }
-
-    private void SampleArm(HandState state, HandSide side, List<NormalizedLandmark> p, int shoulder, float now)
-    {
-      if (!Visible(p[shoulder + 4]) || !TryHeadTop(p, out float headTop))
+      if (!Visible(p[15]) || !Visible(p[16]) || !TryHeadTop(p, out float headTop))
       { MarkMissing(state, now); return; }
       DetectedHands++;
-      float y = p[shoulder + 4].y;
+      float y = Mathf.Max(p[15].y, p[16].y);
       LastHandY = y;
       LastUpwardVelocity = state.lastSampleTime >= 0 ? Mathf.Max(0, (state.lastY - y) / Mathf.Max(.001f, now - state.lastSampleTime)) : 0;
       if (state.lastSampleTime >= 0 && now - state.lastSampleTime > handLostTimeout)
       { state.waveTime = -10; state.raisedSince = state.loweredSince = -1; }
       state.seen = true; state.lastSampleTime = now; state.lastY = y;
-      float height = ArmHeight(p, shoulder);
+      float height = Mathf.Max(ArmHeight(p, 11), ArmHeight(p, 12));
       if (height <= -loweredShoulderRatio)
       {
         state.raisedSince = -1;
@@ -217,10 +218,10 @@ namespace GestureFistGame
         if (state.raisedSince < 0) state.raisedSince = now;
         if (state.armed && now - state.raisedSince >= poseHoldSeconds)
         {
+          if (game == null || !game.CanAcceptLift) return;
           state.armed = false; state.waveTime = now;
           HandWaveDetected?.Invoke(side);
-          if (!requireTwoHands) CompleteWave("姿态举手", 1f);
-          else TryCompleteCooperativeWave(1f);
+          game.RegisterLift((int)side);
         }
       }
     }
@@ -235,40 +236,11 @@ namespace GestureFistGame
       }
     }
 
-    private void TryCompleteCooperativeWave(float velocity)
-    {
-      if (_left.waveTime < 0f || _right.waveTime < 0f) return;
-      if (Mathf.Abs(_left.waveTime - _right.waveTime) > cooperationWindow)
-      {
-        if (_left.waveTime < _right.waveTime) _left.waveTime = -10f;
-        else _right.waveTime = -10f;
-        return;
-      }
-      _left.waveTime = -10f;
-      _right.waveTime = -10f;
-      CompleteWave("左右合作举手", velocity);
-    }
-
-    private void CompleteWave(string source, float velocity)
-    {
-      if (game != null && game.TryThrow(source)) UpwardWaveDetected?.Invoke(velocity);
-    }
-
-    private void ExpirePendingWaves(float now)
-    {
-      if (_left.waveTime >= 0f && now - _left.waveTime > cooperationWindow) _left.waveTime = -10f;
-      if (_right.waveTime >= 0f && now - _right.waveTime > cooperationWindow) _right.waveTime = -10f;
-    }
-
+    private void ExpirePendingWaves(float now) { }
     public void RegisterMouseWave(HandSide side)
     {
-      var state = side == HandSide.Left ? _left : _right;
-      float now = Time.unscaledTime;
-      state.waveTime = now;
-      state.armed = false;
-      HandWaveDetected?.Invoke(side);
-      if (!requireTwoHands) CompleteWave("鼠标上挥", 1f);
-      else TryCompleteCooperativeWave(1f);
+      if (!mouseMode || game == null || !game.SimulationActive) return;
+      HandWaveDetected?.Invoke(side); game.RegisterLift((int)side);
     }
 
     public bool TriggerWave(string source)
@@ -285,10 +257,10 @@ namespace GestureFistGame
     {
       ResetState(_left);
       ResetState(_right);
-      HandDetected = false;
+      DetectedPlayers = 0; HandDetected = false;
       BothHandsDetected = false;
       DetectedHands = 0;
-      _peopleCount = 0; _lastPoseTime = -1f;
+      _peopleCount = 0; _lastPoseTime = -1f; _lastBothPoseTime = -100f;
     }
 
     private static void ResetState(HandState state)

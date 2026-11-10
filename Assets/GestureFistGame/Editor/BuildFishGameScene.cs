@@ -42,7 +42,7 @@ namespace GestureFistGame.Editor
       var game = root.AddComponent<FishGameController>();
       var runtimeChecks = root.AddComponent<FishRuntimeChecks>();
       runtimeChecks.game = game;
-      game.roundSeconds = 30;
+      game.roundSeconds = 90;
       game.autoStart = true;
 
       var arena = new GameObject("Arena - 水道与草岸").transform;

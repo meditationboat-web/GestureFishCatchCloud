@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace GestureFistGame
 {
@@ -56,6 +56,7 @@ namespace GestureFistGame
 
     private void Update()
     {
+      if (game != null && !game.SimulationActive) return;
       _phaseTime += Time.unscaledDeltaTime;
       switch (_phase)
       {
@@ -72,7 +73,7 @@ namespace GestureFistGame
         case Phase.Falling:
           SetCatchVisual(true);
           SetHeight(Mathf.Lerp(raisedHeight, restHeight, Mathf.Clamp01(_phaseTime / Mathf.Max(.01f, fallDuration))));
-          if (_phaseTime >= fallDuration) { _phase = Phase.Cooldown; _phaseTime = 0; }
+          if (_phaseTime >= fallDuration) { game?.GetComponent<FishAudio>()?.Splash(); _phase = Phase.Cooldown; _phaseTime = 0; }
           break;
         case Phase.Cooldown:
           SetCatchVisual(false);
@@ -91,18 +92,19 @@ namespace GestureFistGame
       // Read the hands after the avatar's elastic pose is applied.
       UpdateHandLinkedVisual();
       SyncCatchTrigger();
-      if (IsCatchWindow) TryCatchOverlappingFish();
+      if (IsCatchWindow && !_cooperativeResolution) TryCatchOverlappingFish();
     }
 
     public bool TryThrow()
     {
       if (!CanThrow) return false;
+      game?.GetComponent<FishAudio>()?.Lift();
       _phase = Phase.Raising;
       _phaseTime = 0;
       SetCatchVisual(true);
       UpdateHandLinkedVisual();
       SyncCatchTrigger();
-      TryCatchOverlappingFish();
+      if (!_cooperativeResolution) TryCatchOverlappingFish();
       var water = FindObjectOfType<InteractiveWaterSurface>();
       if (water != null)
       {
@@ -115,8 +117,34 @@ namespace GestureFistGame
       return true;
     }
 
+    private bool _cooperativeResolution;
+    public void ResolveCooperation(int quality)
+    {
+      if (!CanThrow || game == null || !game.SimulationActive) return;
+      var candidates = new System.Collections.Generic.List<FishTarget>();
+      foreach (var fish in FindObjectsOfType<FishTarget>())
+        if (!fish.Caught && !fish.Escaping && !game.WaveResolved(fish.WaveId) && ContainsSwimmingFish(fish)) candidates.Add(fish);
+      candidates.Sort((a, b) => (a.transform.position - transform.position).sqrMagnitude.CompareTo((b.transform.position - transform.position).sqrMagnitude));
+      // A wave resolves once. Fish outside the net escape and cannot be collected by a second lift.
+      var ids = new System.Collections.Generic.HashSet<int>();
+      foreach (var fish in candidates) ids.Add(fish.WaveId);
+      foreach (var fish in FindObjectsOfType<FishTarget>())
+        if (ids.Contains(fish.WaveId) && !candidates.Contains(fish)) fish.Escaping = true;
+      game.RecordWave(quality, candidates.Count);
+      foreach (var fish in candidates) game.MarkWaveResolved(fish.WaveId);
+      _cooperativeResolution = true;
+      if (quality > 0) TryThrow();
+      int keep = quality == 2 ? candidates.Count : quality == 1 ? Mathf.CeilToInt(candidates.Count * .5f) : 0;
+      for (int i = 0; i < candidates.Count; i++)
+      {
+        if (i < keep) game.CatchFish(candidates[i]);
+        else { candidates[i].Escaping = true; candidates[i].speed *= 1.6f; }
+      }
+    }
+
     public void ResetNet()
     {
+      _cooperativeResolution = false;
       _phase = Phase.Ready;
       _phaseTime = 0;
       SetHeight(restHeight);
@@ -127,7 +155,7 @@ namespace GestureFistGame
 
     public void TryCatch(FishTarget fish)
     {
-      if (IsCatchWindow && ContainsSwimmingFish(fish)) game?.CatchFish(fish);
+      if (!_cooperativeResolution && IsCatchWindow && ContainsSwimmingFish(fish)) game?.CatchFish(fish);
     }
 
     /// <summary>
@@ -212,7 +240,13 @@ namespace GestureFistGame
 
     private void SetCatchVisual(bool active)
     {
-      if (visual != null) visual.gameObject.SetActive(true);
+      if (visual != null) {
+        visual.gameObject.SetActive(true);
+        // The same net changes from muted underwater blue to bright raised rope.
+        float above=Mathf.InverseLerp(restHeight,raisedHeight,transform.localPosition.y);
+        Color tint=Color.Lerp(new Color(.08f,.42f,.53f,.48f),new Color(1f,.88f,.58f,1),above);
+        foreach(var line in visual.GetComponentsInChildren<LineRenderer>()) {line.startColor=tint;line.endColor=tint;}
+      }
       // Do not show the legacy duplicate net below the water.  This also
       // clears it when an older serialized scene still contains the object.
       if (submergedVisual != null) submergedVisual.gameObject.SetActive(false);

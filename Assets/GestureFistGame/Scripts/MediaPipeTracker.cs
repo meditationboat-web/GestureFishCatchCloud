@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.IO;
 using Mediapipe;
@@ -27,6 +27,8 @@ namespace GestureFistGame
     public bool autoStart = true;
     public bool usePose = true;
     public bool mirrorPreview = true;
+    public int PoseImageRotation => _webcam != null ? _webcam.videoRotationAngle : 0;
+    public bool PoseImageVerticallyMirrored => _webcam != null && _webcam.videoVerticallyMirrored;
     [Tooltip("部分 Android WebCamTexture 会把视频再倒置 180°；当前手机预览使用此补偿")]
     public int previewRotationOffset = 180;
     [Tooltip("Skip the Intel virtual driver whose RGB24 subtype can block Unity WebCamTexture.Play on Windows.")]

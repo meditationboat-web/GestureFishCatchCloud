@@ -8,7 +8,7 @@ namespace GestureFistGame
     public FishNetController net;
     public FishSpawner spawner;
     public FishGestureInput input;
-    public int roundSeconds = 30;
+    public int roundSeconds = 90;
     public bool autoStart = true;
     [Header("捕鱼音效")]
     public AudioSource catchAudioSource;
@@ -38,6 +38,7 @@ namespace GestureFistGame
 
     private void Awake()
     {
+      if(GetComponent<FishAudio>()==null)gameObject.AddComponent<FishAudio>();
       if (catchAudioSource == null) catchAudioSource = gameObject.AddComponent<AudioSource>();
       catchAudioSource.playOnAwake = false;
       catchAudioSource.loop = false;
@@ -58,61 +59,127 @@ namespace GestureFistGame
       if (autoStart) ResetRound();
     }
 
+    public enum RoundPhase { Menu, Confirming, Countdown, Playing, Paused, Finished }
+    public RoundPhase Phase { get; private set; }
+    public bool SimulationActive => Phase == RoundPhase.Playing;
+    public int LongestCombo { get; private set; }
+    public int PerfectWaves { get; private set; }
+    public int CompletedWaves { get; private set; }
+    public int PassedFish { get; private set; }
+    public int BestScore => PlayerPrefs.GetInt("FishTeamBest", 0);
+    public float SyncRate => CompletedWaves == 0 ? 0 : (float)PerfectWaves / CompletedWaves;
+    public int Stars => PassedFish == 0 ? 0 : Catches >= PassedFish * .8f ? 3 : Catches >= PassedFish * .6f ? 2 : Catches >= PassedFish * .4f ? 1 : 0;
+    public float Countdown { get; private set; }
+    public string PlayerResponse(int side) => _responses[side] == 0 ? "—" : (_responseSum[side] / _responses[side]).ToString("0.00") + " 秒";
+    public string PlayerReport(int side) => "P" + (side + 1) + " 响应 " + (_responses[side] == 0 ? "—" : (_responseSum[side] / _responses[side]).ToString("0.00") + "秒") + " · 完美 " + PerfectWaves;
+    private readonly float[] _responseSum = new float[2];
+    private readonly int[] _responses = new int[2];
+    private float _stable, _lost, _pauseTime, _firstLift = -1;
+    private int _firstSide;
+    private float _liftFeedbackUntil;
+    public bool PlayerLifted(int side) => SimulationActive && ((_firstLift >= 0 && _firstSide == side) || Elapsed < _liftFeedbackUntil);
+    private float _waveStarted;
+    public void WaveStarted() { _waveStarted = Elapsed; }
+    public string FlowHint => Phase == RoundPhase.Confirming ? "两位玩家请入镜，各露出双手" : Phase == RoundPhase.Countdown ? Mathf.CeilToInt(Countdown).ToString() : Phase == RoundPhase.Paused ? (input != null && input.TwoPlayersReady ? "两人已就位，点击确认继续" : "追踪暂停，请两人重新入镜") : LastEvent;
+
     private void Update()
     {
-      if ((IsRunning || IsFinished) && Input.GetKeyDown(KeyCode.R)) ResetRound();
-      if (!IsRunning) return;
-      // 手机首次授权和 MediaPipe 模型加载期间不消耗捕鱼回合时间。
-      // 摄像头失败时也保留画面和诊断文字，方便用户点“重新连接摄像头”。
-      if (input != null && !input.mouseMode && !input.CameraReady) return;
-      TimeRemaining -= Time.unscaledDeltaTime;
-      if (TimeRemaining <= 0)
+      if (Phase == RoundPhase.Menu || IsFinished) return;
+      bool ready = input != null && (input.mouseMode || input.TwoPlayersReady);
+      if (Phase == RoundPhase.Confirming)
       {
-        TimeRemaining = 0;
-        IsRunning = false;
-        IsFinished = true;
-        LastEvent = "回合结束 · 点击重新开始";
-        spawner?.StopSpawning();
+        _stable = ready ? _stable + Time.unscaledDeltaTime : 0;
+        if (_stable >= 2) { Phase = RoundPhase.Countdown; Countdown = 3; }
+        return;
       }
+      if (Phase == RoundPhase.Paused) { _pauseTime += Time.unscaledDeltaTime; if (_pauseTime >= 60) FinishRound(false); return; }
+      _lost = ready ? 0 : input != null ? input.TrackingLostSeconds : _lost + Time.unscaledDeltaTime;
+      if (_lost > .5f) { PauseRound(); return; }
+      if (Phase == RoundPhase.Countdown)
+      {
+        if (!ready) return;
+        Countdown -= Time.unscaledDeltaTime;
+        if (Countdown <= 0) { Phase = RoundPhase.Playing; input?.ResetForPlay(); LastEvent = "观察鱼群，两人双手举过头顶"; }
+        return;
+      }
+      TimeRemaining = Mathf.Max(0, TimeRemaining - Time.unscaledDeltaTime);
+      if (_firstLift >= 0 && Elapsed - _firstLift > 1.5f) ResolveLift(2f);
+      if (TimeRemaining <= 0) FinishRound(true);
     }
-
+    public float Elapsed => roundSeconds - TimeRemaining;
     public void ResetRound()
     {
-      _speciesCounts.Clear();
-      Score = 0;
-      Catches = 0;
-      Combo = 0;
-      TimeRemaining = roundSeconds;
-      IsFinished = false;
-      IsRunning = true;
-      LastEvent = "左右双手一起向上挥，把鱼网抛起来";
-      input?.ResetForRound();
-      foreach (var ragdoll in FindObjectsOfType<FishAvatarRagdoll>()) ragdoll.ResetMotion();
-      net?.ResetNet();
-      spawner?.ResetSpawner();
+      _liftFeedbackUntil = 0;
+      _resolvedWaves.Clear(); roundSeconds = 90; _speciesCounts.Clear(); Score = Catches = Combo = LongestCombo = PerfectWaves = CompletedWaves = PassedFish = 0;
+      System.Array.Clear(_responseSum, 0, 2); System.Array.Clear(_responses, 0, 2);
+      TimeRemaining = 90; IsFinished = false; IsRunning = true;
+      Phase = RoundPhase.Confirming; _stable = _lost = _pauseTime = 0; _firstLift = -1;
+      LastEvent = "等待两位玩家";
+      input?.ResetForRound(); net?.ResetNet(); spawner?.ResetSpawner();
     }
-
-    public bool TryThrow(string source)
+    public void ReturnToMenu() { IsRunning=false; IsFinished=false; Phase=RoundPhase.Menu; _firstLift=-1; spawner?.StopSpawning(); net?.ResetNet(); }
+    public void PauseRound()
     {
-      if (!IsRunning || IsFinished || net == null) return false;
-      if (!net.TryThrow())
-      {
-        LastEvent = "网还在下落或冷却中";
-        return false;
-      }
-      LastEvent = source + " · 网已抛起";
-      return true;
+      if (Phase != RoundPhase.Playing && Phase != RoundPhase.Countdown) return;
+      Phase = RoundPhase.Paused; _pauseTime = _stable = 0; _liftFeedbackUntil = 0;
+      _firstLift = -1; input?.ResetForPlay(); net?.ResetNet();
     }
+    public void ConfirmResume()
+    {
+      if (Phase != RoundPhase.Paused || input == null || (!input.mouseMode && !input.TwoPlayersReady)) return;
+      Phase = RoundPhase.Countdown; Countdown = 3; _lost = 0; input.ResetForPlay();
+    }
+    private void FinishRound(bool complete)
+    {
+      if (IsFinished) return;
+      Score += LongestCombo * 5; IsFinished = true; IsRunning = false; Phase = RoundPhase.Finished; _firstLift = -1;
+      if (spawner != null && spawner.WaveId > 0 && !WaveResolved(spawner.WaveId)) RecordUncaughtWave(spawner.WaveId);
+      spawner?.StopSpawning();
+      if (complete && Score > BestScore) { PlayerPrefs.SetInt("FishTeamBest", Score); PlayerPrefs.Save(); }
+      LastEvent = "回合结束";
+    }
+    public bool CanAcceptLift => SimulationActive && net != null && net.CanThrow;
+    public void RegisterLift(int side)
+    {
+      if (!SimulationActive || net == null || !net.CanThrow) return;
+      if (_firstLift < 0) { _responses[side]++; _responseSum[side] += Mathf.Max(0, Elapsed - _waveStarted); _firstLift = Elapsed; _firstSide = side; LastEvent = "P" + (side + 1) + " 已举网，等待队友"; return; }
+      if (_firstSide == side) return;
+      float gap = Elapsed - _firstLift;
+      // Response is measured from the current fish wave appearing, not against the other player.
+      _responses[side]++;
+      _responseSum[side] += Mathf.Max(0, Elapsed - _waveStarted);
+      ResolveLift(gap);
+    }
+    private void ResolveLift(float gap)
+    {
+      if (gap <= 1.5f) _liftFeedbackUntil = Elapsed + .7f;
+      _firstLift = -1;
+      net.ResolveCooperation(gap <= .5f ? 2 : gap <= 1.5f ? 1 : 0);
+    }
+    public void RecordWave(int quality, int candidates)
+    {
+      if (candidates == 0) { LastEvent = "网内暂无鱼"; return; }
+      GetComponent<FishAudio>()?.Result(quality);
+      CompletedWaves++;
+      if (quality == 2) { PerfectWaves++; Combo++; LongestCombo = Mathf.Max(LongestCombo, Combo); }
+      else Combo = 0;
+      LastEvent = quality == 2 ? "完美协作！ 连击 × " + Combo : quality == 1 ? "差一点，鱼跑了一半" : "鱼跑啦，下波再来";
+    }
+    public void RegisterSpawnedFish() { PassedFish++; }
+    private readonly System.Collections.Generic.HashSet<int> _resolvedWaves = new System.Collections.Generic.HashSet<int>();
+    public bool WaveResolved(int id) => _resolvedWaves.Contains(id);
+    public void MarkWaveResolved(int id) { _resolvedWaves.Add(id); }
+    public void RecordUncaughtWave(int id) { if (_resolvedWaves.Add(id)) RecordWave(0, 1); }
+    public bool TryThrow(string source) => SimulationActive && net != null && net.TryThrow();
 
     public void CatchFish(FishTarget fish)
     {
-      if (!IsRunning || IsFinished || fish == null || fish.Caught) return;
+      if (!SimulationActive || fish == null || fish.Caught) return;
       fish.MarkCaught();
       Score += fish.points;
       Catches++;
       _speciesCounts[fish.displayName] = CapturedCount(fish.displayName) + 1;
-      Combo++;
-      LastEvent = "捕获 " + fish.displayName + "  +" + fish.points;
+      // Cooperative result text remains visible after awarding individual fish points.
       if (catchAudioSource != null && catchSound != null)
         catchAudioSource.PlayOneShot(catchSound, catchVolume);
       FishCaught?.Invoke(fish);
@@ -120,8 +187,7 @@ namespace GestureFistGame
 
     public void MissedFish()
     {
-      Combo = 0;
-      if (IsRunning) LastEvent = "鱼游过去了 · 再挥一次";
+      // Wave resolution, rather than each individual missed fish, owns the combo.
     }
 
     private static AudioClip CreateCatchSound()

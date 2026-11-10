@@ -1,4 +1,4 @@
-%YAML 1.1
+﻿%YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
 --- !u!29 &1
 OcclusionCullingSettings:
@@ -12555,7 +12555,7 @@ MonoBehaviour:
   net: {fileID: 2029702376}
   spawner: {fileID: 1920938083}
   input: {fileID: 774825871}
-  roundSeconds: 30
+  roundSeconds: 90
   autoStart: 1
   catchAudioSource: {fileID: 0}
   catchSound: {fileID: 0}
@@ -39157,7 +39157,7 @@ MonoBehaviour:
   headTopMarginRatio: 0.35
   loweredShoulderRatio: 0.15
   poseHoldSeconds: 0.1
-  cooperationWindow: 1.2
+  cooperationWindow: 1.5
   handLostTimeout: 0.55
 --- !u!114 &774825872
 MonoBehaviour:

@@ -12,6 +12,7 @@ namespace GestureFistGame
     private string[] species = { "红眼鱼", "金鱼", "白斑狗鱼" };
     private bool started;
     private Font font;
+    private Text bestLabel;
     public bool IsMenuOpen => !started;
     private void Awake()
     {
@@ -31,15 +32,18 @@ namespace GestureFistGame
       }
       menu = Panel("StartScreen", safe, Vector2.zero, Vector2.zero, false);
       menu.anchorMin=Vector2.zero;menu.anchorMax=Vector2.one;menu.offsetMin=menu.offsetMax=Vector2.zero;
-      var background = menu.gameObject.AddComponent<Image>(); background.color=new Color(.24f,.36f,.12f,.58f);
+      var background = menu.gameObject.AddComponent<Image>(); background.color=new Color(.12f,.22f,.08f,.18f);
       card=Panel("WelcomeCard",menu,new Vector2(940,1000),Vector2.zero,true);
-      Label(card,"绿叶小渔场",new Vector2(0,215),new Vector2(850,140),64);
-      Label(card,"举手过头顶，一起抛网",new Vector2(0,90),new Vector2(850,70),36);
-      MakeButton(card,"手势开始",new Vector2(0,-60),()=>Begin(true));
-      MakeButton(card,"鼠标开始",new Vector2(0,-180),()=>Begin(false));
+      Label(card,"体感抓鱼",new Vector2(0,230),new Vector2(850,140),76);
+      MakeButton(card,"手势开始",new Vector2(0,40),()=>GetComponent<FishPageCards>().ShowTutorial(true));
+      bestLabel = Label(card,"历史最佳 " + game.BestScore + " 分",new Vector2(0,-110),new Vector2(850,70),36);
+#if UNITY_EDITOR
+      MakeButton(card,"键盘测试 Q / P",new Vector2(0,-245),()=>GetComponent<FishPageCards>().ShowTutorial(false));
+#endif
       SetHud(false);
       Layout();
     }
+    public void ReturnHome() { started=false; game.ReturnToMenu(); SetHud(false); menu.gameObject.SetActive(true); menu.SetAsLastSibling(); }
     public void Begin(bool gesture)
     {
       started=true; menu.gameObject.SetActive(false); SetHud(true);
@@ -54,6 +58,7 @@ namespace GestureFistGame
     private void Update()
     {
       Layout();
+      bestLabel.text="历史最佳 " + game.BestScore + " 分";
       for(int i=0;i<3;i++) counts[i].text="×" + game.CapturedCount(species[i]);
       if(!started)
       {
@@ -66,9 +71,10 @@ namespace GestureFistGame
     {
       bool wide=Screen.width>=Screen.height;
       counters.anchorMin=counters.anchorMax=new Vector2(.5f,1);
-      counters.anchoredPosition=new Vector2(0,wide?-220:-285);
-      card.sizeDelta=wide?new Vector2(1100,660):new Vector2(940,660);
-      card.localScale=Vector3.one*(wide?.85f:1f);
+      counters.anchoredPosition=new Vector2(0,wide?-155:-190);
+      counters.localScale=Vector3.one*(wide?.72f:.86f);
+      card.sizeDelta=wide?new Vector2(1300,860):new Vector2(1000,960);
+      card.localScale=Vector3.one;
     }
     private RectTransform Panel(string name,Transform parent,Vector2 size,Vector2 position,bool rounded)
     {

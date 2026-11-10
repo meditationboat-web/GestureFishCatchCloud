@@ -57,12 +57,28 @@ namespace GestureFistGame
       return prototypes[Mathf.Min(index, prototypes.Length - 1)];
     }
 
+    private int _pendingCount, _pendingIndex;
+    private float _nextFish;
+    private float[] _waveLanes;
+    private float _nextWave;
+    private int _waveId;
+    public int WaveId => _waveId;
     private void Update()
     {
-      if (game == null || !game.IsRunning || prototypes == null || prototypes.Length == 0) return;
-      if (Time.unscaledTime < _nextSpawn) return;
-      SpawnOne();
-      _nextSpawn = Time.unscaledTime + spawnInterval * UnityEngine.Random.Range(.72f, 1.18f);
+      if (game == null || !game.SimulationActive || prototypes == null || prototypes.Length == 0) return;
+      if (_pendingIndex < _pendingCount && game.Elapsed >= _nextFish) {
+        SpawnOne(_pendingIndex++, _pendingCount);
+        _nextFish = game.Elapsed + .18f + (float)_random.NextDouble() * .14f;
+      }
+      if (game.Elapsed < _nextWave || game.TimeRemaining < 6f) return;
+      if (_waveId > 0 && !game.WaveResolved(_waveId)) game.RecordUncaughtWave(_waveId);
+      int tier = Mathf.Min(2, Mathf.FloorToInt(game.Elapsed / 30f));
+      _waveId++; game.WaveStarted();
+      _pendingCount=tier+2;_pendingIndex=0;_nextFish=game.Elapsed;
+      _waveLanes=new float[_pendingCount];
+      for(int i=0;i<_pendingCount;i++) _waveLanes[i]=Mathf.Lerp(-1.2f,1.2f,(i+.25f+(float)_random.NextDouble()*.5f)/_pendingCount);
+      for(int i=_pendingCount-1;i>0;i--){int j=_random.Next(i+1);float lane=_waveLanes[i];_waveLanes[i]=_waveLanes[j];_waveLanes[j]=lane;}
+      _nextWave = game.Elapsed + (tier == 0 ? 8 : tier == 1 ? 7 : 6);
     }
 
     public void ResetSpawner()
@@ -75,18 +91,20 @@ namespace GestureFistGame
         fish.gameObject.SetActive(false);
         Destroy(fish.gameObject);
       }
-      _nextSpawn = Time.unscaledTime + .4f;
+      _nextWave = 0; _waveId = 0; _pendingCount=_pendingIndex=0;
     }
 
-    public void StopSpawning() { _nextSpawn = float.PositiveInfinity; }
+    public void StopSpawning() { _nextWave = float.PositiveInfinity; _pendingCount=_pendingIndex=0; }
 
-    private void SpawnOne()
+    private void SpawnOne(int index, int count)
     {
       var source = ChoosePrototype();
       var fish = Instantiate(source, transform);
       fish.game = game;
-      fish.transform.position = new Vector3(spawnX, .7f, UnityEngine.Random.Range(-laneHalfWidth, laneHalfWidth));
-      fish.speed = UnityEngine.Random.Range(minSpeed, maxSpeed) * (1f + game.Catches * .006f);
+      fish.transform.position = new Vector3(12.5f+(float)_random.NextDouble()*.6f, .7f, _waveLanes[index]);
+      fish.transform.localScale *= 1.65f;
+      fish.speed = game.Elapsed < 30 ? 2.4f : game.Elapsed < 60 ? 2.7f : 3f;
+      fish.WaveId = _waveId; game.RegisterSpawnedFish();
       // The Doro asset's forward axis is opposite to its travel axis. Rotate
       // it so the face is visibly left while the fish crosses right-to-left.
       fish.transform.rotation = Quaternion.Euler(0, 90, 0);

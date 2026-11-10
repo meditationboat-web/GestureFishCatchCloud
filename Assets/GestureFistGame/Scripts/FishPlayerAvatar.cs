@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace GestureFistGame
 {
@@ -49,6 +49,7 @@ namespace GestureFistGame
 
     private void Update()
     {
+      if (_input != null && _input.game != null && _input.game.Phase == FishGameController.RoundPhase.Paused) return;
       float amount = 0f;
       if (_waveUntil >= 0f)
       {

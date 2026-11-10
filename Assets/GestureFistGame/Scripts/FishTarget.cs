@@ -1,10 +1,12 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace GestureFistGame
 {
   public sealed class FishTarget : MonoBehaviour
   {
     public FishGameController game;
+    public bool Escaping;
+    public int WaveId;
     public int points = 1;
     public string displayName = "小鱼";
     public float speed = 1.8f;
@@ -16,6 +18,11 @@ namespace GestureFistGame
     private Vector3 _startPosition;
     private float _launchTime;
     private bool _launched;
+    private Quaternion _catchRotation;
+    private Vector3 _catchScale;
+    private float _swimTime;
+    private Quaternion _swimRotation;
+    private bool _swimStarted;
     private Rigidbody _body;
     private InteractiveWaterSurface _water;
     private float _visualCenterOffsetY;
@@ -77,30 +84,37 @@ namespace GestureFistGame
 
     private void FixedUpdate()
     {
+      if (game != null && !game.SimulationActive) return;
       var previousBounds = VisualBounds;
       if (Caught && _launched)
       {
         _launchTime += Time.fixedDeltaTime;
         var p = transform.position;
         float normalized = Mathf.Clamp01(_launchTime / Mathf.Max(.05f, launchDuration));
-        // Start above the raised net so the rope mesh never hides the fish.
-        p.y = Mathf.Lerp(_startPosition.y, launchHeight, normalized);
-        p.x += Mathf.Sin(_launchTime * 15f) * .012f;
+        // A short forward arc reads clearly from the overhead river camera.
+        float eased = normalized * normalized * (3f - 2f * normalized);
+        p = _startPosition + Vector3.left * (1.4f * eased);
+        p.y += Mathf.Sin(normalized * Mathf.PI) * 1.6f;
         transform.position = p;
-        transform.Rotate(0, 240f * Time.fixedDeltaTime, 180f * Time.fixedDeltaTime, Space.Self);
+        transform.rotation = _catchRotation * Quaternion.Euler(0, 0, Mathf.Sin(normalized*Mathf.PI)*18f);
+        transform.localScale = _catchScale * Mathf.Lerp(1f, .15f, Mathf.Clamp01((normalized-.65f)/.35f));
         if (!RemoveOnGround(previousBounds) && _launchTime >= launchDuration) Destroy(gameObject);
         return;
       }
       if (Caught) return;
       // The reference game shows the fish crossing the net from right to left.
       // Keep the fish on the water lane's z range and remove it after the left bank.
+      if(!_swimStarted){_swimStarted=true;_swimRotation=transform.rotation;_swimTime=GetInstanceID()%97*.1f;}
+      _swimTime+=Time.fixedDeltaTime;
+      float variation=Mathf.PerlinNoise(_swimTime*.45f,Mathf.Abs(GetInstanceID()%251)*.13f)-.5f;
+      transform.rotation=_swimRotation*Quaternion.Euler(0,Mathf.Sin(_swimTime*3.2f)*1.2f+variation*2f,Mathf.Sin(_swimTime*2.1f)*.5f);
       transform.position += Vector3.left * speed * Time.fixedDeltaTime;
       FollowWater(false);
       if (RemoveOnGround(previousBounds)) return;
       if (_water != null && Time.frameCount % 6 == 0) _water.AddRipple(transform.position, .012f);
       if (transform.position.x < -4.7f)
       {
-        game?.MissedFish();
+        if (game != null && !game.WaveResolved(WaveId)) game.RecordUncaughtWave(WaveId);
         Destroy(gameObject);
       }
     }
@@ -133,7 +147,8 @@ namespace GestureFistGame
       if (Caught) return;
       Caught = true;
       _launched = true;
-      _launchTime = 0;
+      _launchTime = 0; launchDuration = .8f;
+      _catchRotation=transform.rotation;_catchScale=transform.localScale;
       _startPosition = transform.position;
       var net = FindObjectOfType<FishNetController>();
       if (net != null)
