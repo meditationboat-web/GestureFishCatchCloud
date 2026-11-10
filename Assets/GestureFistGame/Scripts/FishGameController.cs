@@ -139,6 +139,7 @@ namespace GestureFistGame
       LastEvent = "回合结束";
     }
     public bool CanAcceptLift => SimulationActive && net != null && net.CanThrow;
+    public void CancelPendingLift() { _firstLift = -1; _liftFeedbackUntil = 0; }
     public void RegisterLift(int side)
     {
       if (!SimulationActive || net == null || !net.CanThrow) return;

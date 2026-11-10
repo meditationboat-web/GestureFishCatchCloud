@@ -160,7 +160,7 @@ namespace GestureFistGame
           if (people.Count == 2 && _peopleCount == 2 && game != null && game.SimulationActive) game.PauseRound();
         }
         _peopleCount = people.Count; _leftOwnerX = lx; _rightOwnerX = rx; _lastPoseTime = now;
-        if (people.Count == 2)
+        if (people.Count == 2 && PersonReady(people[0]) && PersonReady(people[1]))
         {
           SamplePerson(_left, HandSide.Left, people[0], now);
           SamplePerson(_right, HandSide.Right, people[1], now);
@@ -171,7 +171,10 @@ namespace GestureFistGame
       HandDetected = DetectedHands > 0;
       BothHandsDetected = DetectedHands >= 2;
       if (BothHandsDetected) _lastBothPoseTime = now;
+      else game?.CancelPendingLift();
     }
+
+    private bool PersonReady(List<NormalizedLandmark> p) => Visible(p[15]) && Visible(p[16]) && TryHeadTop(p, out _);
 
     private bool Visible(NormalizedLandmark p) =>
       !float.IsNaN(p.x) && !float.IsNaN(p.y) && p.x >= 0 && p.x <= 1 && p.y >= 0 && p.y <= 1 &&
@@ -229,6 +232,7 @@ namespace GestureFistGame
     private void MarkMissing(HandState state, float now)
     {
       state.raisedSince = state.loweredSince = -1;
+      state.armed = false;
       if (state.lastSampleTime >= 0 && now - state.lastSampleTime > handLostTimeout)
       {
         state.seen = false; state.waveTime = -10f;

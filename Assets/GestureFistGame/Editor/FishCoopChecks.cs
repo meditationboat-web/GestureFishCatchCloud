@@ -69,6 +69,19 @@ namespace GestureFistGame.Editor
         Check(lifts==1,"both wrists above estimated head trigger");
         sample.Invoke(input,new object[]{state,FishGestureInput.HandSide.Left,Person(.25f,true,true).landmarks,2f});
         Check(lifts==1,"held hands do not repeat");
+        var partial=Mediapipe.Tasks.Vision.PoseLandmarker.PoseLandmarkerResult.Alloc(2);
+        partial.poseLandmarks.Add(Person(.25f,true,true));
+        var hidden=Person(.75f,true,true);
+        hidden.landmarks[15]=Mediapipe.Tasks.Components.Containers.NormalizedLandmark.CreateFrom(new Mediapipe.NormalizedLandmark{X=.7f,Y=.2f,Visibility=.1f,Presence=.1f});
+        partial.poseLandmarks.Add(hidden);input.ReceivePose(partial);
+        Check(!input.TwoPlayersReady && !input.BothHandsDetected,"validate both players before sampling gestures");
+        input.ReceivePose(default);
+        Check(!input.TwoPlayersReady && !game.PlayerLifted(0),"tracking dropout cancels pending cooperation");
+        Check(!(bool)state.GetType().GetField("armed").GetValue(state),"tracking loss requires lowering arms again");
+        game.PauseRound();
+        int completed=game.CompletedWaves;
+        game.RegisterLift(0);game.RegisterLift(1);
+        Check(game.CompletedWaves==completed && !game.PlayerLifted(0),"paused gestures cannot resolve waves");
         Debug.Log("FISH_COOP_CHECKS_PASS");
       } finally {UnityEngine.Object.DestroyImmediate(root);}
     }
