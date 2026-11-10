@@ -39196,7 +39196,7 @@ MonoBehaviour:
   autoStart: 0
   usePose: 1
   mirrorPreview: 1
-  previewRotationOffset: 180
+  previewRotationOffset: 0
   skipUnsupportedIntelVirtualCamera: 1
 --- !u!4 &774825874
 Transform:

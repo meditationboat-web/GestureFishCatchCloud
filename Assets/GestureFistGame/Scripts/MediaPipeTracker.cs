@@ -296,7 +296,7 @@ namespace GestureFistGame
       if (preview != null)
       {
         preview.uvRect = new UnityEngine.Rect(mirrorPreview ? 1:0, _webcam.videoVerticallyMirrored ? 1:0, mirrorPreview ? -1:1, _webcam.videoVerticallyMirrored ? -1:1);
-        preview.rectTransform.localEulerAngles = new Vector3(0,0,-_webcam.videoRotationAngle + previewRotationOffset);
+        preview.rectTransform.localEulerAngles = new Vector3(0,0,-_webcam.videoRotationAngle + (fishInput != null ? 0 : previewRotationOffset));
       }
       var timer=System.Diagnostics.Stopwatch.StartNew();
       try

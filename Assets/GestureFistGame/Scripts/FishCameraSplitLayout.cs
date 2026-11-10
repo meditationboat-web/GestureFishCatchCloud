@@ -93,12 +93,12 @@ namespace GestureFistGame
       placeholder.text=ui.input.mouseMode?"摄像头预览":"等待摄像头";
       if(hasImage)
       {
-        // Preserve the entire camera frame so portrait screens do not crop out either player.
+        // Cover the full screen without stretching; crop excess edges at the frame mask.
         var rect=ui.cameraPreview.rectTransform;
         rect.anchorMin=rect.anchorMax=Vector2.one*.5f;rect.anchoredPosition=Vector2.zero;
         bool rotated=Mathf.Abs(Mathf.Sin(rect.localEulerAngles.z*Mathf.Deg2Rad))>.5f;
         float w=tex.width,h=tex.height;
-        float scale=Mathf.Min(previewFrame.rect.width/(rotated?h:w),previewFrame.rect.height/(rotated?w:h));
+        float scale=Mathf.Max(previewFrame.rect.width/(rotated?h:w),previewFrame.rect.height/(rotated?w:h));
         rect.sizeDelta=new Vector2(w,h)*scale;
       }
       var status=transform.Find("SafeArea/StatusPanel") as RectTransform;
