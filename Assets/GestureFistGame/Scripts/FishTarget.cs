@@ -1,0 +1,176 @@
+using UnityEngine;
+
+namespace GestureFistGame
+{
+  public sealed class FishTarget : MonoBehaviour
+  {
+    public FishGameController game;
+    public bool Escaping;
+    public int WaveId;
+    public int points = 1;
+    public string displayName = "小鱼";
+    public float speed = 1.8f;
+    public float launchHeight = 2.8f;
+    public float launchDuration = .42f;
+    [Tooltip("游动时模型高度浸入水面的比例；0.5 为半入水。"), Range(0f, 1f)]
+    public float submergedFraction = .5f;
+    public bool Caught { get; private set; }
+    private Vector3 _startPosition;
+    private float _launchTime;
+    private bool _launched;
+    private TextMesh _scoreLabel;
+    private Quaternion _catchRotation;
+    private Vector3 _catchScale;
+    private float _swimTime;
+    private Quaternion _swimRotation;
+    private bool _swimStarted;
+    private Rigidbody _body;
+    private InteractiveWaterSurface _water;
+    private float _visualCenterOffsetY;
+    private float _visualHeight;
+    private Renderer[] _renderers;
+
+    public Bounds VisualBounds
+    {
+      get
+      {
+        if (_renderers == null) _renderers = GetComponentsInChildren<Renderer>();
+        bool found = false;
+        Bounds bounds = new Bounds(transform.position, Vector3.zero);
+        foreach (var renderer in _renderers)
+        {
+          if (renderer == null || !renderer.enabled || renderer is ParticleSystemRenderer || renderer is LineRenderer) continue;
+          if (!found) { bounds = renderer.bounds; found = true; }
+          else bounds.Encapsulate(renderer.bounds);
+        }
+        return bounds;
+      }
+    }
+
+    private void OnEnable()
+    {
+      if (_water == null) _water = FindObjectOfType<InteractiveWaterSurface>();
+      // FBX pivots need not be at the body center. Use the rendered bounds
+      // after spawn rotation/scale instead of lowering every pivot by a constant.
+      var renderers = GetComponentsInChildren<Renderer>();
+      bool found = false;
+      var bounds = new Bounds();
+      foreach (var renderer in renderers)
+      {
+        if (!renderer.enabled || renderer is ParticleSystemRenderer || renderer is LineRenderer) continue;
+        if (!found) { bounds = renderer.bounds; found = true; }
+        else bounds.Encapsulate(renderer.bounds);
+      }
+      _visualCenterOffsetY = found ? bounds.center.y - transform.position.y : 0f;
+      _visualHeight = found ? bounds.size.y : 0f;
+      FollowWater(true);
+    }
+
+    private void FollowWater(bool snap)
+    {
+      if (Caught || _water == null) return;
+      var position = transform.position;
+      float target = _water.SampleSurfaceHeight(position) - _visualCenterOffsetY
+        + _visualHeight * (.5f - submergedFraction);
+      position.y = snap ? target : Mathf.Lerp(position.y, target, 1f - Mathf.Exp(-10f * Time.fixedDeltaTime));
+      transform.position = position;
+    }
+
+    private void Awake()
+    {
+      _body = GetComponent<Rigidbody>();
+      _startPosition = transform.position;
+      _water = FindObjectOfType<InteractiveWaterSurface>();
+    }
+
+    private void FixedUpdate()
+    {
+      if (game != null && !game.SimulationActive) return;
+      var previousBounds = VisualBounds;
+      if (Caught && _launched)
+      {
+        _launchTime += Time.fixedDeltaTime;
+        float normalized = Mathf.Clamp01(_launchTime / Mathf.Max(.05f, launchDuration));
+        transform.position = _startPosition;
+        transform.rotation = _catchRotation;
+        if(normalized < .3f) {
+          float pulse=Mathf.Sin(Mathf.Clamp01(normalized/.3f)*Mathf.PI*.5f);
+          transform.localScale=_catchScale*Mathf.Lerp(1f,1.55f,pulse);
+        } else {
+          if(_scoreLabel==null) {
+            foreach(var renderer in GetComponentsInChildren<Renderer>())renderer.enabled=false;
+            var label=new GameObject("CatchPoints");label.layer=gameObject.layer;
+            label.transform.SetParent(transform,false);
+            _scoreLabel=label.AddComponent<TextMesh>();_scoreLabel.text="+"+points;
+            _scoreLabel.anchor=TextAnchor.MiddleCenter;_scoreLabel.alignment=TextAlignment.Center;
+            _scoreLabel.fontSize=80;_scoreLabel.characterSize=.12f;_scoreLabel.color=new Color(1f,.9f,.25f);
+          }
+          transform.localScale=_catchScale;
+          float progress=(normalized-.3f)/.7f;
+          var camera=Camera.main;
+          if(camera!=null){_scoreLabel.transform.rotation=camera.transform.rotation;_scoreLabel.transform.position=_startPosition+camera.transform.up*(progress*.85f)-camera.transform.forward*.3f;}
+          var color=_scoreLabel.color;color.a=1-Mathf.SmoothStep(0,1,progress);_scoreLabel.color=color;
+        }
+        if(_launchTime>=launchDuration)Destroy(gameObject);
+        return;
+      }
+      if (Caught) return;
+      // The reference game shows the fish crossing the net from right to left.
+      // Keep the fish on the water lane's z range and remove it after the left bank.
+      if(!_swimStarted){_swimStarted=true;_swimRotation=transform.rotation;_swimTime=GetInstanceID()%97*.1f;}
+      _swimTime+=Time.fixedDeltaTime;
+      float variation=Mathf.PerlinNoise(_swimTime*.45f,Mathf.Abs(GetInstanceID()%251)*.13f)-.5f;
+      transform.rotation=_swimRotation*Quaternion.Euler(0,Mathf.Sin(_swimTime*3.2f)*1.2f+variation*2f,Mathf.Sin(_swimTime*2.1f)*.5f);
+      transform.position += Vector3.left * speed * Time.fixedDeltaTime;
+      FollowWater(false);
+      if (RemoveOnGround(previousBounds)) return;
+      if (_water != null && Time.frameCount % 6 == 0) _water.AddRipple(transform.position, .012f);
+      if (transform.position.x < -4.7f)
+      {
+        if (game != null && !game.WaveResolved(WaveId)) game.RecordUncaughtWave(WaveId);
+        Destroy(gameObject);
+      }
+    }
+
+    // Sweep the rendered body, since these kinematic fish move by transform.
+    // Ground-only filtering keeps the net trigger and water from deleting fish.
+    private bool RemoveOnGround(Bounds previous)
+    {
+      var current = VisualBounds;
+      var half = Vector3.Max(previous.extents, current.extents) + Vector3.one * .015f;
+      var delta = current.center - previous.center;
+      foreach (var hit in Physics.BoxCastAll(previous.center, half, delta.normalized,
+        Quaternion.identity, delta.magnitude, ~0, QueryTriggerInteraction.Ignore))
+        if (hit.collider.GetComponent<FishGroundSurface>() != null) return DespawnOnGround();
+      foreach (var collider in Physics.OverlapBox(current.center, half, Quaternion.identity, ~0, QueryTriggerInteraction.Ignore))
+        if (collider.GetComponent<FishGroundSurface>() != null) return DespawnOnGround();
+      return false;
+    }
+
+    private bool DespawnOnGround()
+    {
+      if (!Caught) game?.MissedFish();
+      gameObject.SetActive(false);
+      Destroy(gameObject);
+      return true;
+    }
+
+    public void MarkCaught()
+    {
+      if (Caught) return;
+      Caught = true;
+      _launched = true;
+      _launchTime = 0; launchDuration = 1.05f;
+      _catchRotation=transform.rotation;_catchScale=transform.localScale;
+      _startPosition = transform.position;
+      if (_body != null) _body.isKinematic = true;
+      foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+      var net = other.GetComponentInParent<FishNetController>();
+      if (net != null) net.TryCatch(this);
+    }
+  }
+}
