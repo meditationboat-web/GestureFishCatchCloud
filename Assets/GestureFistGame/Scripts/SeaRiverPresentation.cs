@@ -38,13 +38,13 @@ namespace GestureFistGame {
    }
    Number("FishCount" + j, x + 136f, 25f, 74f, 57f);
  }
- Picture("TimeCaption",650,113,131,86,"TimeLabel");Picture("SyncCaption",1005,113,139,86,"SyncLabel");timeValue=Number("TimeDigits",790,116,196,79);syncValue=Number("SyncDigits",1152,116,174,79);
+ Picture("TimeCaption",650,113,131,86,"TimeLabel");Picture("ScoreCard",1005,113,139,86,"PanelBlue");var scoreCaption=Item("ScoreCaption",1012,125,125,62).gameObject.AddComponent<Text>();scoreCaption.font=ui.scoreText.font;scoreCaption.fontSize=42;scoreCaption.alignment=TextAnchor.MiddleCenter;scoreCaption.color=new Color(.12f,.28f,.42f);scoreCaption.text="分数";scoreCaption.raycastTarget=false;timeValue=Number("TimeDigits",790,116,196,79);syncValue=Number("SyncDigits",1152,116,174,79);
  }
  var safe=(RectTransform)transform.Find("SafeArea");header.localScale=Vector3.one*(safe.rect.width/1980f);
  var old=transform.Find("SafeArea/SpeciesCounters");if(old!=null)old.gameObject.SetActive(false);
  foreach(string name in new[]{"TimeLeft","TeamSync","TeamScore","PerfectCombo","PlayerOneState","PlayerTwoState"}){var t=transform.Find("SafeArea/CompactCoopHUD/"+name);if(t!=null)t.gameObject.SetActive(false);}
  int[] indices={1,2,0};string[] species={"红眼鱼","金鱼","白斑狗鱼"};for(int j=0;j<3;j++)header.Find("FishCount"+j).GetComponent<Text>().text=ui.game.CapturedCount(species[indices[j]]).ToString();
- timeValue.text=ui.game.Stage == 1 ? "—" : Mathf.CeilToInt(ui.game.TimeRemaining).ToString("00");syncValue.text=Mathf.RoundToInt(ui.game.SyncRate*100).ToString("00")+"%";header.gameObject.SetActive(ui.game.IsRunning||ui.game.IsFinished);
+ timeValue.text=ui.game.Stage == 1 ? "—" : Mathf.CeilToInt(ui.game.TimeRemaining).ToString("00");syncValue.text=ui.game.Score.ToString("00");header.gameObject.SetActive(ui.game.IsRunning||ui.game.IsFinished);
  }
  static void Stretch(RectTransform r){r.anchorMin=Vector2.zero;r.anchorMax=Vector2.one;r.offsetMin=r.offsetMax=Vector2.zero;}
  void OnDestroy(){if(texture!=null){texture.Release();Destroy(texture);}}

@@ -4,7 +4,7 @@ namespace GestureFistGame {
   // Minimal camera-first HUD; each value reads the live round state.
   [DefaultExecutionOrder(200)]
   public sealed class FishCompactHud:MonoBehaviour {
-    FishGameUI ui;RectTransform root;Text score,time,combo,sync,p1,p2,result;float resultUntil;string last;Button replay,home,reconnect;
+    FishGameUI ui;RectTransform root;Text score,time,combo,sync,p1,p2,result;float resultUntil;string last;Button replay,home;
     Text Pill(string name,Vector2 min,Vector2 max,Color bg,Color fg,int size){
       var go=new GameObject(name,typeof(RectTransform),typeof(Image));go.transform.SetParent(root,false);
       var r=go.GetComponent<RectTransform>();r.anchorMin=min;r.anchorMax=max;r.offsetMin=r.offsetMax=Vector2.zero;
@@ -28,26 +28,22 @@ namespace GestureFistGame {
       var back=Pill("ReturnHome",new Vector2(.51f,.12f),new Vector2(.81f,.18f),new Color(.16f,.55f,.61f),Color.white,32);
       back.text="返回首页";var backImage=back.transform.parent.GetComponent<Image>();backImage.raycastTarget=true;
       home=backImage.gameObject.AddComponent<Button>();home.targetGraphic=backImage;home.onClick.AddListener(()=>GetComponent<FishStartScreen>().ReturnHome());
-      var camera=Pill("ReconnectCamera",new Vector2(.34f,.32f),new Vector2(.66f,.38f),new Color(.16f,.55f,.61f),Color.white,30);
-      camera.text="重连摄像头";var cameraImage=camera.transform.parent.GetComponent<Image>();cameraImage.raycastTarget=true;
-      reconnect=cameraImage.gameObject.AddComponent<Button>();reconnect.targetGraphic=cameraImage;reconnect.onClick.AddListener(()=>ui.Calibrate());
       result=Pill("CooperationResult",new Vector2(.2f,.22f),new Vector2(.8f,.3f),new Color(.1f,.2f,.15f,.65f),Color.white,38);
     }
     void LateUpdate(){
       var g=ui.game;bool active=g.IsRunning||g.IsFinished;root.gameObject.SetActive(active);
       if(!active)return;
       foreach(string name in new[]{"TitleCard","ScorePanel","StatusPanel"}){var old=transform.Find("SafeArea/"+name);if(old!=null)old.gameObject.SetActive(false);}
-      reconnect.gameObject.SetActive(g.Phase==FishGameController.RoundPhase.Paused || g.Phase==FishGameController.RoundPhase.Confirming);
       replay.gameObject.SetActive(false);home.gameObject.SetActive(false);
       score.text=g.Score+" 分";time.text="剩 "+Mathf.CeilToInt(g.TimeRemaining)+" 秒";combo.text="连击 × "+g.Combo;sync.text="同步率 "+g.SyncRate.ToString("P0");
       
       p1.text="P1 "+(g.PlayerLifted(0)?"已抬网":ui.input.TwoPlayersReady?"待抬网":"待入镜");
       p2.text="P2 "+(g.PlayerLifted(1)?"已抬网":ui.input.TwoPlayersReady?"待抬网":"待入镜");
       if(!g.SimulationActive) { resultUntil=0; last=null; }
-      if(last!=g.LastEvent){last=g.LastEvent;if(last.StartsWith("完美")||last.StartsWith("差一点")||last.StartsWith("鱼跑")||last.Contains("已举网")||last.Contains("暂无鱼")){result.text=last;resultUntil=Time.unscaledTime+2;}}
+      if(last!=g.LastEvent){last=g.LastEvent;if(last.StartsWith("起网成功")||last.StartsWith("差一点")||last.StartsWith("鱼跑")||last.Contains("已举网")||last.Contains("暂无鱼")){result.text=last;resultUntil=Time.unscaledTime+2;}}
       bool showResult = Time.unscaledTime < resultUntil;
       if (!showResult && g.Stage == 1)
-        result.text = "先放下双手，再一起举过头顶起网";
+        result.text = "先放下双手，再举过头顶起网";
       result.transform.parent.gameObject.SetActive(g.SimulationActive && (showResult || g.Stage == 1));
       if(ui.finishPanel!=null&&g.IsFinished)ui.finishPanel.transform.SetAsLastSibling();
     }

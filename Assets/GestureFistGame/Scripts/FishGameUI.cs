@@ -116,7 +116,7 @@ namespace GestureFistGame
             " · 同步率 " + game.SyncRate.ToString("P0") + "\n最长连击 × " + game.LongestCombo +
             " · 奖励 +" + game.LongestCombo * 5 + "\n" + game.PlayerReport(0) + "\n" + game.PlayerReport(1) + "\n历史最佳 " + game.BestScore;
       }
-      if (cameraPanel != null) cameraPanel.SetActive(game.IsRunning || game.IsFinished);
+      if (cameraPanel != null) cameraPanel.SetActive(false);
       SetButtonLabel(resetButton, game.Phase == FishGameController.RoundPhase.Paused ? "确认继续" : "再玩一回");
       if (gestureButton != null) gestureButton.interactable = input.mouseMode;
       if (mouseButton != null) mouseButton.interactable = !input.mouseMode;

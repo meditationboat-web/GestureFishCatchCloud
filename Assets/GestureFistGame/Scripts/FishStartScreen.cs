@@ -24,7 +24,14 @@ namespace GestureFistGame
     private float leftWave=-10,rightWave=-10,cooldown;
     private void ApplyOpeningArt(){
       var bg=Resources.Load<Texture2D>("Opening/Background");if(bg==null)return;
-      art=Panel("OpeningArtwork",menu,new Vector2(2048,1152),Vector2.zero,false);art.SetAsFirstSibling();
+      var backdrop = Panel("OpeningBackdrop", menu, Vector2.zero, Vector2.zero, false);
+      backdrop.anchorMin = Vector2.zero;
+      backdrop.anchorMax = Vector2.one;
+      backdrop.offsetMin = backdrop.offsetMax = Vector2.zero;
+      var backdropImage = backdrop.gameObject.AddComponent<RawImage>();
+      backdropImage.texture = Resources.Load<Texture2D>("Opening/EdgeBackdrop");
+      backdropImage.raycastTarget = false;
+      art=Panel("OpeningArtwork",menu,new Vector2(2048,1152),Vector2.zero,false);art.SetSiblingIndex(1);
       var image=art.gameObject.AddComponent<RawImage>();image.texture=bg;image.raycastTarget=false;
       foreach(Transform child in card)if(child.name=="Label")child.gameObject.SetActive(false);
       card.GetComponent<Image>().enabled=false;

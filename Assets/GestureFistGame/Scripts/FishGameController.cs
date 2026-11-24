@@ -74,7 +74,7 @@ namespace GestureFistGame
     public int PerfectWaves { get; private set; }
     public int CompletedWaves { get; private set; }
     public int PassedFish { get; private set; }
-    public int BestScore => PlayerPrefs.GetInt("FishTeamBest", 0);
+    public int BestScore => PlayerPrefs.GetInt("FishSoloBest", 0);
     public float SyncRate => CompletedWaves == 0 ? 0 : (float)PerfectWaves / CompletedWaves;
     public int Stars => PassedFish == 0 ? 0 : Catches >= PassedFish * .8f ? 3 : Catches >= PassedFish * .6f ? 2 : Catches >= PassedFish * .4f ? 1 : 0;
     public float Countdown { get; private set; }
@@ -88,12 +88,13 @@ namespace GestureFistGame
     public bool PlayerLifted(int side) => SimulationActive && ((_firstLift >= 0 && _firstSide == side) || Elapsed < _liftFeedbackUntil);
     private float _waveStarted;
     public void WaveStarted() { _waveStarted = Elapsed; }
-    public string FlowHint => Phase == RoundPhase.Confirming ? "两位玩家请入镜，各露出双手" : Phase == RoundPhase.Countdown ? Mathf.CeilToInt(Countdown).ToString() : Phase == RoundPhase.Paused ? (input != null && input.TwoPlayersReady ? "两人已就位，稳定后自动继续" : "追踪暂停，请两人重新入镜") : Stage == 1 && SimulationActive ? "教程：等鱼进入网内，两人双手过头顶；时间差≤0.5秒完成教学" : LastEvent;
+    public const bool SoloMode = true;
+    public string FlowHint => Phase == RoundPhase.Confirming ? "请站在摄像头前，露出头部和双手" : Phase == RoundPhase.Countdown ? Mathf.CeilToInt(Countdown).ToString() : Phase == RoundPhase.Paused ? (input != null && input.PlayersReady ? "已就位，稳定后自动继续" : "追踪暂停，请重新入镜") : Stage == 1 && SimulationActive ? "教程：等鱼进入网内，双手腕举过头顶" : LastEvent;
 
     private void Update()
     {
       if (Phase == RoundPhase.Menu || IsFinished) return;
-      bool ready = input != null && (input.mouseMode || input.TwoPlayersReady);
+      bool ready = input != null && (input.mouseMode || input.PlayersReady);
       if (Phase == RoundPhase.Confirming)
       {
         _stable = ready ? _stable + Time.unscaledDeltaTime : 0;
@@ -133,7 +134,7 @@ namespace GestureFistGame
       System.Array.Clear(_responseSum, 0, 2); System.Array.Clear(_responses, 0, 2);
       TimeRemaining = roundSeconds; IsFinished = false; IsRunning = true;
       Phase = RoundPhase.Confirming; _stable = _lost = _pauseTime = 0; _firstLift = -1;
-      LastEvent = "等待两位玩家";
+      LastEvent = "等待玩家入镜";
       input?.ResetForRound(); net?.ResetNet(); spawner?.ResetSpawner();
     }
     public void ReturnToMenu() { IsRunning=false; IsFinished=false; Phase=RoundPhase.Menu; _firstLift=-1; spawner?.StopSpawning(); net?.ResetNet(); }
@@ -145,7 +146,7 @@ namespace GestureFistGame
     }
     public void ConfirmResume()
     {
-      if (Phase != RoundPhase.Paused || input == null || (!input.mouseMode && !input.TwoPlayersReady)) return;
+      if (Phase != RoundPhase.Paused || input == null || (!input.mouseMode && !input.PlayersReady)) return;
       Phase = RoundPhase.Countdown; Countdown = 3; _lost = 0; input.ResetForPlay();
     }
     private void FinishRound(bool complete)
@@ -155,7 +156,7 @@ namespace GestureFistGame
       Score += LongestCombo * 5; IsFinished = true; IsRunning = false; Phase = RoundPhase.Finished; _firstLift = -1;
       if (spawner != null && spawner.WaveId > 0 && !WaveResolved(spawner.WaveId)) RecordUncaughtWave(spawner.WaveId);
       spawner?.StopSpawning();
-      if (complete && Stage != 1 && Score > BestScore) { PlayerPrefs.SetInt("FishTeamBest", Score); PlayerPrefs.Save(); }
+      if (complete && Stage != 1 && Score > BestScore) { PlayerPrefs.SetInt("FishSoloBest", Score); PlayerPrefs.Save(); }
       LastEvent = complete ? (Stage == 3 ? "三关挑战完成！" : StageName + "完成") : "本关中断，请重试";
     }
     public string LiftDebugResult { get; private set; } = "";
@@ -165,6 +166,7 @@ namespace GestureFistGame
     public void RegisterLift(int side)
     {
       if (!SimulationActive || net == null || !net.CanThrow) return;
+      if (SoloMode) { _responses[0]++; _responseSum[0] += Mathf.Max(0, Elapsed - _waveStarted); ResolveLift(0f); return; }
       if (_firstLift < 0) { _responses[side]++; _responseSum[side] += Mathf.Max(0, Elapsed - _waveStarted); _firstLift = Elapsed; _firstSide = side; LastEvent = "P" + (side + 1) + " 已举网，等待队友"; return; }
       if (_firstSide == side) return;
       float gap = Elapsed - _firstLift;
@@ -191,7 +193,7 @@ namespace GestureFistGame
       CompletedWaves++;
       if (quality == 2) { if (Stage == 1) _tutorialCaught = true; PerfectWaves++; Combo++; LongestCombo = Mathf.Max(LongestCombo, Combo); }
       else Combo = 0;
-      LastEvent = quality == 2 ? "完美协作！ 连击 × " + Combo : quality == 1 ? "差一点，鱼跑了一半" : "鱼跑啦，下波再来";
+      LastEvent = quality == 2 ? "起网成功！ 连击 × " + Combo : quality == 1 ? "差一点，鱼跑了一半" : "鱼跑啦，下波再来";
     }
     public void RegisterSpawnedFish() { PassedFish++; }
     private readonly System.Collections.Generic.HashSet<int> _resolvedWaves = new System.Collections.Generic.HashSet<int>();

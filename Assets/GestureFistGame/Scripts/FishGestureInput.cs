@@ -32,6 +32,7 @@ namespace GestureFistGame
     public int DetectedPlayers { get; private set; }
     private float _lastBothPoseTime = -100f;
     public float TrackingLostSeconds => Mathf.Max(0, Time.unscaledTime - _lastBothPoseTime);
+    public bool PlayersReady => FishGameController.SoloMode ? HandDetected && Time.unscaledTime - _lastPoseTime <= .5f : TwoPlayersReady;
     public bool TwoPlayersReady => DetectedPlayers == 2 && BothHandsDetected && Time.unscaledTime - _lastPoseTime <= .5f;
     public void ResetForPlay() { ResetState(_left); ResetState(_right); _left.armed = _right.armed = false; }
     public bool BothHandsDetected { get; private set; }
@@ -95,6 +96,8 @@ namespace GestureFistGame
       if (!HandDetected || Time.unscaledTime - Mathf.Max(_left.lastSampleTime, _right.lastSampleTime) > .5f)
         Status = tracker != null && !tracker.CameraReady ? tracker.Status :
           (requireTwoHands ? "请让头部、肩膀和手腕入镜，举手过头顶" : "请让头部、肩膀和手腕入镜，举手过头顶");
+      else if (FishGameController.SoloMode)
+        Status = "已识别玩家 · 双手腕举过头顶起网";
       else if (requireTwoHands && !BothHandsDetected)
         Status = "已识别 " + DetectedHands + "/2 位玩家 · 请让头部、肩膀和手腕入镜";
       else if (requireTwoHands && (_left.waveTime >= 0f || _right.waveTime >= 0f))
@@ -144,6 +147,14 @@ namespace GestureFistGame
           if (p != null && p.Count >= 17 && Visible(p[11]) && Visible(p[12]) &&
               Vector2.Distance(Point(p[11]), Point(p[12])) >= .04f) people.Add(p);
         }
+      if (FishGameController.SoloMode && people.Count > 1)
+      {
+        float target = _peopleCount > 0 ? _leftOwnerX : .5f;
+        people.Sort((a,b) => Mathf.Abs(CenterX(a)-target).CompareTo(Mathf.Abs(CenterX(b)-target)));
+        int readyIndex = people.FindIndex(PersonReady);
+        if (readyIndex > 0) (people[0], people[readyIndex]) = (people[readyIndex], people[0]);
+        people.RemoveRange(1,people.Count-1);
+      }
       people.Sort((a, b) => CenterX(a).CompareTo(CenterX(b)));
       if (people.Count > 2) people.RemoveRange(2, people.Count - 2);
       DetectedHands = 0; DetectedPlayers = people.Count;
@@ -160,7 +171,9 @@ namespace GestureFistGame
           if (people.Count == 2 && _peopleCount == 2 && game != null && game.SimulationActive) game.PauseRound();
         }
         _peopleCount = people.Count; _leftOwnerX = lx; _rightOwnerX = rx; _lastPoseTime = now;
-        if (people.Count == 2 && PersonReady(people[0]) && PersonReady(people[1]))
+        if (FishGameController.SoloMode && PersonReady(people[0]))
+          SamplePerson(_left, HandSide.Left, people[0], now);
+        else if (people.Count == 2 && PersonReady(people[0]) && PersonReady(people[1]))
         {
           SamplePerson(_left, HandSide.Left, people[0], now);
           SamplePerson(_right, HandSide.Right, people[1], now);
@@ -170,7 +183,7 @@ namespace GestureFistGame
       else { MarkMissing(_left, now); MarkMissing(_right, now); }
       HandDetected = DetectedHands > 0;
       BothHandsDetected = DetectedHands >= 2;
-      if (BothHandsDetected) _lastBothPoseTime = now;
+      if (FishGameController.SoloMode ? HandDetected : BothHandsDetected) _lastBothPoseTime = now;
       else if (TrackingLostSeconds > .2f) game?.CancelPendingLift();
     }
 
