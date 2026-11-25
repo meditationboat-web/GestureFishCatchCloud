@@ -89,7 +89,7 @@ namespace GestureFistGame
     private float _waveStarted;
     public void WaveStarted() { _waveStarted = Elapsed; }
     public const bool SoloMode = true;
-    public string FlowHint => Phase == RoundPhase.Confirming ? "请站在摄像头前，露出头部和双手" : Phase == RoundPhase.Countdown ? Mathf.CeilToInt(Countdown).ToString() : Phase == RoundPhase.Paused ? (input != null && input.PlayersReady ? "已就位，稳定后自动继续" : "追踪暂停，请重新入镜") : Stage == 1 && SimulationActive ? "教程：等鱼进入网内，双手腕举过头顶" : LastEvent;
+    public string FlowHint => Phase == RoundPhase.Confirming ? "请站在摄像头前，露出头部和双手" : Phase == RoundPhase.Countdown ? Mathf.CeilToInt(Countdown).ToString() : Phase == RoundPhase.Paused ? (input != null && input.PlayersReady ? "已就位，稳定后自动继续" : "追踪暂停，请重新入镜") : Stage == 1 && SimulationActive ? "教程：等鱼进入网内，双手腕举过肩膀" : LastEvent;
 
     private void Update()
     {
@@ -115,7 +115,7 @@ namespace GestureFistGame
       {
         if (!ready) return;
         Countdown -= Time.unscaledDeltaTime;
-        if (Countdown <= 0) { Phase = RoundPhase.Playing; input?.ResetForPlay(); LastEvent = "观察鱼群，两人双手举过头顶"; }
+        if (Countdown <= 0) { Phase = RoundPhase.Playing; input?.ResetForPlay(); LastEvent = "观察鱼群，双手举过肩膀"; }
         return;
       }
       if (Stage == 1 && _tutorialCaught) { FinishRound(true); return; }

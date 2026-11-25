@@ -43,7 +43,7 @@ namespace GestureFistGame {
       if(last!=g.LastEvent){last=g.LastEvent;if(last.StartsWith("起网成功")||last.StartsWith("差一点")||last.StartsWith("鱼跑")||last.Contains("已举网")||last.Contains("暂无鱼")){result.text=last;resultUntil=Time.unscaledTime+2;}}
       bool showResult = Time.unscaledTime < resultUntil;
       if (!showResult && g.Stage == 1)
-        result.text = "先放下双手，再举过头顶起网";
+        result.text = "先放下双手，再举过肩膀起网";
       result.transform.parent.gameObject.SetActive(g.SimulationActive && (showResult || g.Stage == 1));
       if(ui.finishPanel!=null&&g.IsFinished)ui.finishPanel.transform.SetAsLastSibling();
     }

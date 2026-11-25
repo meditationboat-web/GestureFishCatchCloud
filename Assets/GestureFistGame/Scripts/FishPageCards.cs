@@ -22,7 +22,7 @@ namespace GestureFistGame {
   void Awake(){ui=GetComponent<FishGameUI>();var safe=transform.Find("SafeArea");
    tutorial=Card("ActionTutorial",safe,new Vector2(.08f,.16f),new Vector2(.92f,.86f),new Color(.95f,.97f,.99f));
    Label(tutorial,"动作教学 · 三步",new Vector2(.05f,.85f),new Vector2(.95f,.98f),44);
-   string[] steps={"第 1 步  观察鱼群\n等鱼游进渔网范围","第 2 步  举起渔网\n先放下双手，再将两只手腕举过头顶","第 3 步  捕获鱼群\n举网成功时，收下渔网范围内的鱼\n抓到一条鱼即可完成教程"};
+   string[] steps={"第 1 步  观察鱼群\n等鱼游进渔网范围","第 2 步  举起渔网\n先放下双手，再将两只手腕举过肩膀","第 3 步  捕获鱼群\n举网成功时，收下渔网范围内的鱼\n抓到一条鱼即可完成教程"};
    var recognition=new GameObject("RecognitionCharacter",typeof(RectTransform),typeof(RawImage));recognition.transform.SetParent(tutorial,false);
    var rr=recognition.GetComponent<RectTransform>();rr.anchorMin=new Vector2(.015f,.16f);rr.anchorMax=new Vector2(.2f,.82f);rr.offsetMin=rr.offsetMax=Vector2.zero;
    recognition.GetComponent<RawImage>().texture=Resources.Load<Texture2D>("Opening/Recognition");recognition.GetComponent<RawImage>().raycastTarget=false;

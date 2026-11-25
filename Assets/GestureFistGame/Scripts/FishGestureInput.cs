@@ -95,9 +95,9 @@ namespace GestureFistGame
       }
       if (!HandDetected || Time.unscaledTime - Mathf.Max(_left.lastSampleTime, _right.lastSampleTime) > .5f)
         Status = tracker != null && !tracker.CameraReady ? tracker.Status :
-          (requireTwoHands ? "请让头部、肩膀和手腕入镜，举手过头顶" : "请让头部、肩膀和手腕入镜，举手过头顶");
+          (requireTwoHands ? "请让头部、肩膀和手腕入镜，双手举过肩膀" : "请让头部、肩膀和手腕入镜，双手举过肩膀");
       else if (FishGameController.SoloMode)
-        Status = "已识别玩家 · 双手腕举过头顶起网";
+        Status = "已识别玩家 · 双手腕举过肩膀起网";
       else if (requireTwoHands && !BothHandsDetected)
         Status = "已识别 " + DetectedHands + "/2 位玩家 · 请让头部、肩膀和手腕入镜";
       else if (requireTwoHands && (_left.waveTime >= 0f || _right.waveTime >= 0f))
@@ -193,8 +193,8 @@ namespace GestureFistGame
       if (Time.unscaledTime - state.lastSampleTime > .5f || state.lastSampleTime < 0)
         return "缺少有效的头部或手腕关键点";
       if (!state.armed) return "请先放下双手";
-      if (state.raisedSince < 0) return "双手腕尚未同时超过头顶线";
-      return "已超过头顶线，保持举手";
+      if (state.raisedSince < 0) return FishGameController.SoloMode ? "双手腕尚未同时过肩" : "双手腕尚未同时超过头顶线";
+      return FishGameController.SoloMode ? "双手腕已过肩" : "已超过头顶线，保持举手";
     }
 
     private bool PersonReady(List<NormalizedLandmark> p) => Visible(p[15]) && Visible(p[16]) && TryHeadTop(p, out _);
@@ -235,14 +235,17 @@ namespace GestureFistGame
       {
         state.raisedSince = -1;
         if (state.loweredSince < 0) state.loweredSince = now;
-        if (now - state.loweredSince >= poseHoldSeconds) state.armed = true;
+        if (FishGameController.SoloMode || now - state.loweredSince >= poseHoldSeconds) state.armed = true;
       }
       else
       {
         state.loweredSince = -1;
-        if (y > headTop) { state.raisedSince = -1; return; }
+        bool raised = FishGameController.SoloMode
+          ? p[15].y < p[11].y && p[16].y < p[12].y
+          : y <= headTop;
+        if (!raised) { state.raisedSince = -1; return; }
         if (state.raisedSince < 0) state.raisedSince = now;
-        if (state.armed && now - state.raisedSince >= poseHoldSeconds)
+        if (state.armed && (FishGameController.SoloMode || now - state.raisedSince >= poseHoldSeconds))
         {
           if (game == null || !game.CanAcceptLift) return;
           state.armed = false; state.waveTime = now;
