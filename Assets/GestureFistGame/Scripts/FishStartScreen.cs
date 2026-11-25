@@ -15,7 +15,7 @@ namespace GestureFistGame
     private Text bestLabel,menuHint;
     private Button[] options=new Button[4];
     private int selected;
-    private RectTransform art;
+    private RectTransform art, backdrop;
     private UnityEngine.Video.VideoPlayer openingVideo;
     private RenderTexture openingTexture;
     private RectTransform settings;
@@ -24,10 +24,11 @@ namespace GestureFistGame
     private float leftWave=-10,rightWave=-10,cooldown;
     private void ApplyOpeningArt(){
       var bg=Resources.Load<Texture2D>("Opening/Background");if(bg==null)return;
-      var backdrop = Panel("OpeningBackdrop", menu, Vector2.zero, Vector2.zero, false);
+      backdrop = Panel("OpeningBackdrop", menu, Vector2.zero, Vector2.zero, false);
       backdrop.anchorMin = Vector2.zero;
       backdrop.anchorMax = Vector2.one;
       backdrop.offsetMin = backdrop.offsetMax = Vector2.zero;
+      backdrop.SetAsFirstSibling();
       var backdropImage = backdrop.gameObject.AddComponent<RawImage>();
       backdropImage.texture = Resources.Load<Texture2D>("Opening/EdgeBackdrop");
       backdropImage.raycastTarget = false;
@@ -42,7 +43,7 @@ namespace GestureFistGame
         r.anchorMin=r.anchorMax=Vector2.one*.5f;r.sizeDelta=new Vector2(w[i],h[i]);r.anchoredPosition=new Vector2(x[i]+w[i]*.5f-1024,576-y[i]-h[i]*.5f);
         foreach(Transform child in r)child.gameObject.SetActive(false);
         var texture=Resources.Load<Texture2D>("Opening/"+assets[i]);var graphic=button.GetComponent<Image>();
-        graphic.sprite=Sprite.Create(texture,new Rect(0,0,texture.width,texture.height),Vector2.one*.5f);graphic.type=Image.Type.Simple;graphic.color=Color.white;
+        graphic.sprite=Sprite.Create(texture,new Rect(0,0,texture.width,texture.height),Vector2.one*.5f);graphic.type=Image.Type.Simple;graphic.preserveAspect=true;graphic.color=Color.white;
       }
     }
     private void Start(){
@@ -173,7 +174,17 @@ namespace GestureFistGame
       counters.localScale=Vector3.one*(wide?.72f:.86f);
       card.sizeDelta=wide?new Vector2(1300,860):new Vector2(1000,960);
       card.localScale=Vector3.one;
-      if(art!=null){var r=(RectTransform)menu;art.localScale=Vector3.one*Mathf.Min(r.rect.width/2048f,r.rect.height/1152f);settings.SetAsLastSibling();}
+      if (art != null)
+      {
+        art.localScale = Vector3.one * Mathf.Min(menu.rect.width / 2048f, menu.rect.height / 1152f);
+        // Extend the decorative background through the display cutout insets.
+        var canvasRect = ((RectTransform)transform).rect;
+        var safe = Screen.safeArea;
+        backdrop.offsetMin = -new Vector2(canvasRect.width * safe.xMin / Screen.width,
+                                          canvasRect.height * safe.yMin / Screen.height);
+        backdrop.offsetMax = new Vector2(canvasRect.width * (1f - safe.xMax / Screen.width),
+                                         canvasRect.height * (1f - safe.yMax / Screen.height));
+      }
     }
     private RectTransform Panel(string name,Transform parent,Vector2 size,Vector2 position,bool rounded)
     {

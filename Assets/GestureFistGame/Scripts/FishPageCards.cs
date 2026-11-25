@@ -7,7 +7,18 @@ namespace GestureFistGame {
   FishGameUI ui;RectTransform tutorial,results;Text[] values=new Text[6];Text[] responses=new Text[2],perfects=new Text[2];bool gesture,teaching;
   RectTransform Card(string name,Transform parent,Vector2 min,Vector2 max,Color color){var go=new GameObject(name,typeof(RectTransform),typeof(Image));go.transform.SetParent(parent,false);var r=go.GetComponent<RectTransform>();r.anchorMin=min;r.anchorMax=max;r.offsetMin=r.offsetMax=Vector2.zero;FishUiTheme.Card(go.GetComponent<Image>(),color);return r;}
   Text Label(Transform parent,string text,Vector2 min,Vector2 max,int size){var go=new GameObject("Label",typeof(RectTransform),typeof(Text));go.transform.SetParent(parent,false);var r=go.GetComponent<RectTransform>();r.anchorMin=min;r.anchorMax=max;r.offsetMin=r.offsetMax=Vector2.zero;var t=go.GetComponent<Text>();t.font=ui.scoreText.font;t.text=text;t.fontSize=size;t.alignment=TextAnchor.MiddleCenter;t.color=new Color(.14f,.22f,.28f);t.raycastTarget=false;return t;}
-  void Button(Transform parent,string text,Vector2 min,Vector2 max,UnityEngine.Events.UnityAction action){var r=Card(text,parent,min,max,new Color(.16f,.55f,.61f));var b=r.gameObject.AddComponent<Button>();b.onClick.AddListener(action);Label(r,text,Vector2.zero,Vector2.one,34).color=Color.white;}
+  void Button(Transform parent, string text, Vector2 min, Vector2 max, UnityEngine.Events.UnityAction action)
+  {
+   var rect = Card(text, parent, min, max, new Color(.16f,.55f,.61f));
+   var button = rect.gameObject.AddComponent<Button>();
+   button.targetGraphic = rect.GetComponent<Image>();
+   button.onClick.AddListener(action);
+   var label = Label(rect, text, Vector2.zero, Vector2.one, 34);
+   label.color = Color.white;
+   label.resizeTextForBestFit = true;
+   label.resizeTextMinSize = 18;
+   label.resizeTextMaxSize = 34;
+  }
   void Awake(){ui=GetComponent<FishGameUI>();var safe=transform.Find("SafeArea");
    tutorial=Card("ActionTutorial",safe,new Vector2(.08f,.16f),new Vector2(.92f,.86f),new Color(.95f,.97f,.99f));
    Label(tutorial,"动作教学 · 三步",new Vector2(.05f,.85f),new Vector2(.95f,.98f),44);
@@ -40,9 +51,9 @@ namespace GestureFistGame {
     responses[i]=Label(player,"—",new Vector2(.02f,.03f),new Vector2(.49f,.4f),38);
     perfects[i]=Label(player,"0",new Vector2(.51f,.03f),new Vector2(.98f,.4f),38);
    }
-   Button(results,"再来一局",new Vector2(.08f,.04f),new Vector2(.48f,.135f),()=>{if(ui.game.CanAdvance)ui.game.AdvanceStage();else if(ui.game.Stage==3 && ui.game.IsFinished)ui.game.ReplayCampaign();else ui.game.ResetRound();});
+   Button(results,"再来一局",new Vector2(.21f,.025f),new Vector2(.47f,.15f),()=>{if(ui.game.CanAdvance)ui.game.AdvanceStage();else if(ui.game.Stage==3 && ui.game.IsFinished)ui.game.ReplayCampaign();else ui.game.ResetRound();});
    advanceText=results.Find("再来一局/Label").GetComponent<Text>();
-   Button(results,"返回首页",new Vector2(.52f,.04f),new Vector2(.92f,.135f),()=>GetComponent<FishStartScreen>().ReturnHome());
+   Button(results,"返回首页",new Vector2(.53f,.025f),new Vector2(.79f,.15f),()=>GetComponent<FishStartScreen>().ReturnHome());
    tutorial.gameObject.SetActive(false);results.gameObject.SetActive(false);
   }
   void FitCharacter(string name,float left,float right){
