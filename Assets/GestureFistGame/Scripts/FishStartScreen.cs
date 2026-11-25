@@ -18,6 +18,7 @@ namespace GestureFistGame
     private RectTransform art, backdrop;
     private UnityEngine.Video.VideoPlayer openingVideo;
     private RenderTexture openingTexture;
+    private float openingDeadline;
     private RectTransform settings;
     private int settingSelected;
     private bool leftArmed,rightArmed;
@@ -50,15 +51,37 @@ namespace GestureFistGame
       var clip=Resources.Load<UnityEngine.Video.VideoClip>("Opening/Opening");
       if(clip!=null){
        var overlay=Panel("OpeningVideo",transform,new Vector2(2048,1152),Vector2.zero,false);overlay.anchorMin=Vector2.zero;overlay.anchorMax=Vector2.one;overlay.offsetMin=overlay.offsetMax=Vector2.zero;
-       openingTexture=new RenderTexture(1280,720,0);overlay.gameObject.AddComponent<RawImage>().texture=openingTexture;
+       openingTexture = new RenderTexture(1280, 720, 0);
+       var videoImage = overlay.gameObject.AddComponent<RawImage>();
+       videoImage.texture = openingTexture;
+       videoImage.enabled = false;
        openingVideo=overlay.gameObject.AddComponent<UnityEngine.Video.VideoPlayer>();openingVideo.clip=clip;openingVideo.renderMode=UnityEngine.Video.VideoRenderMode.RenderTexture;openingVideo.targetTexture=openingTexture;openingVideo.audioOutputMode=UnityEngine.Video.VideoAudioOutputMode.None;
-       var skip=overlay.gameObject.AddComponent<Button>();skip.onClick.AddListener(()=>{openingVideo.Stop();overlay.gameObject.SetActive(false);});
-       openingVideo.loopPointReached+=v=>overlay.gameObject.SetActive(false);openingVideo.errorReceived+=(v,e)=>overlay.gameObject.SetActive(false);openingVideo.Play();
+       var skip = overlay.gameObject.AddComponent<Button>();
+       skip.targetGraphic = videoImage;
+       skip.onClick.AddListener(CloseOpeningVideo);
+       openingVideo.playOnAwake = false;
+       openingVideo.sendFrameReadyEvents = true;
+       openingVideo.frameReady += (player, frame) =>
+       {
+         videoImage.enabled = true;
+         player.sendFrameReadyEvents = false;
+         openingDeadline = Time.unscaledTime + (float)clip.length + 2f;
+       };
+       openingVideo.loopPointReached += player => CloseOpeningVideo();
+       openingVideo.errorReceived += (player, error) => CloseOpeningVideo();
+       openingDeadline = Time.unscaledTime + 4f;
+       openingVideo.Play();
       }
       ui.input.PoseUpdated+=MenuPose;if(System.Array.IndexOf(System.Environment.GetCommandLineArgs(),"-batchmode")<0)ui.UseGesture();}
+    private void CloseOpeningVideo()
+    {
+      openingVideo.Stop();
+      openingVideo.gameObject.SetActive(false);
+    }
+
     private void OnDestroy(){if(openingTexture!=null){openingTexture.Release();Destroy(openingTexture);}if(ui!=null&&ui.input!=null)ui.input.PoseUpdated-=MenuPose;}
     public void MenuAction(int direction){
-      if(openingVideo!=null&&openingVideo.gameObject.activeSelf){if(direction==0){openingVideo.Stop();openingVideo.gameObject.SetActive(false);}return;}
+      if(openingVideo!=null&&openingVideo.gameObject.activeSelf){if(direction==0){CloseOpeningVideo();}return;}
       if(started)return;
       var pages=GetComponent<FishPageCards>();
       if(pages!=null&&pages.Teaching){if(direction==0)pages.ConfirmTutorial();return;}
@@ -142,6 +165,7 @@ namespace GestureFistGame
     public void ReturnHome() { started=false; game.ReturnToMenu(); SetHud(false); menu.gameObject.SetActive(true); menu.SetAsLastSibling(); }
     public void Begin(bool gesture)
     {
+      if (openingVideo != null && openingVideo.gameObject.activeSelf) CloseOpeningVideo();
       started=true; menu.gameObject.SetActive(false); SetHud(true);
       if(gesture) ui.UseGesture(); else ui.UseMouse();
       game.StartCampaign(); EventSystem.current?.SetSelectedGameObject(null);
@@ -156,6 +180,8 @@ namespace GestureFistGame
 #if UNITY_EDITOR
       if(!started){if(Input.GetKeyDown(KeyCode.DownArrow))MenuAction(1);if(Input.GetKeyDown(KeyCode.UpArrow))MenuAction(-1);if(Input.GetKeyDown(KeyCode.Return))MenuAction(0);}
 #endif
+      if (openingVideo != null && openingVideo.gameObject.activeSelf && Time.unscaledTime >= openingDeadline)
+        CloseOpeningVideo();
       Layout();
       bestLabel.text="历史最佳 " + game.BestScore + " 分";
       for(int i=0;i<3;i++) counts[i].text="×" + game.CapturedCount(species[i]);
